@@ -2,6 +2,433 @@
 
 ## Constructs <a name="Constructs" id="Constructs"></a>
 
+### FargateCrew <a name="FargateCrew" id="@raindancers/raindancers-crew.FargateCrew"></a>
+
+Per-crew Fargate scaffolding for ONE KiroCrew remote crew: the two roles a task carries and the log group it writes to.
+
+One per crew, alongside the shared {@link FargateCrewBase }. Deleting this
+removes exactly one crew's identity and logs and leaves the cluster and its
+siblings untouched. Port of the upstream `kirocrew-fargate-crew` template.
+
+Security invariants preserved from upstream:
+- The **task role** (the running container's identity, and the blast radius
+  one agent turn reaches) is created with NO policies and MUST NEVER be
+  granted `secretsmanager:GetSecretValue` — the model credential is already
+  in the container env, so the grant buys nothing while letting one turn read
+  every crew's secret.
+- The **execution role** reads secrets scoped to `kirocrew/crew/<crew>/*`
+  only, with individually-listed actions (no prefix wildcards).
+- Both assume-role policies carry an `aws:SourceAccount` condition so the
+  roles are not assumable on behalf of an unrelated stack's task.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.FargateCrew.Initializer"></a>
+
+```typescript
+import { FargateCrew } from '@raindancers/raindancers-crew'
+
+new FargateCrew(scope: Construct, id: string, props: FargateCrewProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCrewProps">FargateCrewProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.FargateCrew.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCrewProps">FargateCrewProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.with">with</a></code> | Applies one or more mixins to this construct. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.FargateCrew.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.FargateCrew.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.FargateCrew.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.FargateCrew.isConstruct"></a>
+
+```typescript
+import { FargateCrew } from '@raindancers/raindancers-crew'
+
+FargateCrew.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.FargateCrew.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.crew">crew</a></code> | <code>string</code> | The crew this construct scaffolds. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.executionRole">executionRole</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | Role ECS assumes BEFORE the container starts (secret fetch + log stream). |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.LogGroup</code> | The crew's log group (`/kirocrew/crew/<crew>`). |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.secretArnPattern">secretArnPattern</a></code> | <code>string</code> | The one secret ARN pattern the execution role may read. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.secretNamePrefix">secretNamePrefix</a></code> | <code>string</code> | Namespace a crew secret must be created under for the exec role to read it. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrew.property.taskRole">taskRole</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | Identity the RUNNING container carries. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.FargateCrew.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `crew`<sup>Required</sup> <a name="crew" id="@raindancers/raindancers-crew.FargateCrew.property.crew"></a>
+
+```typescript
+public readonly crew: string;
+```
+
+- *Type:* string
+
+The crew this construct scaffolds.
+
+---
+
+##### `executionRole`<sup>Required</sup> <a name="executionRole" id="@raindancers/raindancers-crew.FargateCrew.property.executionRole"></a>
+
+```typescript
+public readonly executionRole: Role;
+```
+
+- *Type:* aws-cdk-lib.aws_iam.Role
+
+Role ECS assumes BEFORE the container starts (secret fetch + log stream).
+
+---
+
+##### `logGroup`<sup>Required</sup> <a name="logGroup" id="@raindancers/raindancers-crew.FargateCrew.property.logGroup"></a>
+
+```typescript
+public readonly logGroup: LogGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_logs.LogGroup
+
+The crew's log group (`/kirocrew/crew/<crew>`).
+
+---
+
+##### `secretArnPattern`<sup>Required</sup> <a name="secretArnPattern" id="@raindancers/raindancers-crew.FargateCrew.property.secretArnPattern"></a>
+
+```typescript
+public readonly secretArnPattern: string;
+```
+
+- *Type:* string
+
+The one secret ARN pattern the execution role may read.
+
+---
+
+##### `secretNamePrefix`<sup>Required</sup> <a name="secretNamePrefix" id="@raindancers/raindancers-crew.FargateCrew.property.secretNamePrefix"></a>
+
+```typescript
+public readonly secretNamePrefix: string;
+```
+
+- *Type:* string
+
+Namespace a crew secret must be created under for the exec role to read it.
+
+---
+
+##### `taskRole`<sup>Required</sup> <a name="taskRole" id="@raindancers/raindancers-crew.FargateCrew.property.taskRole"></a>
+
+```typescript
+public readonly taskRole: Role;
+```
+
+- *Type:* aws-cdk-lib.aws_iam.Role
+
+Identity the RUNNING container carries.
+
+Created with no policies.
+
+---
+
+
+### FargateCrewBase <a name="FargateCrewBase" id="@raindancers/raindancers-crew.FargateCrewBase"></a>
+
+Shared Fargate scaffolding for KiroCrew remote crews: the ECS cluster every crew task runs on and the egress-only security group they are placed in.
+
+ONE per account and region. The per-crew roles and log group live in
+{@link FargateCrew } (one per crew), so deleting a crew cannot delete the
+cluster its siblings run on.
+
+Port of the upstream `kirocrew-fargate-base` CloudFormation template.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.FargateCrewBase.Initializer"></a>
+
+```typescript
+import { FargateCrewBase } from '@raindancers/raindancers-crew'
+
+new FargateCrewBase(scope: Construct, id: string, props: FargateCrewBaseProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCrewBaseProps">FargateCrewBaseProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.FargateCrewBase.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCrewBaseProps">FargateCrewBaseProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.with">with</a></code> | Applies one or more mixins to this construct. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.FargateCrewBase.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.FargateCrewBase.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.FargateCrewBase.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.FargateCrewBase.isConstruct"></a>
+
+```typescript
+import { FargateCrewBase } from '@raindancers/raindancers-crew'
+
+FargateCrewBase.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.FargateCrewBase.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.property.cluster">cluster</a></code> | <code>aws-cdk-lib.aws_ecs.Cluster</code> | The ECS cluster crew tasks run on. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.property.cpuArchitecture">cpuArchitecture</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCpuArchitecture">FargateCpuArchitecture</a></code> | The architecture crew images must be built for. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.property.securityGroup">securityGroup</a></code> | <code>aws-cdk-lib.aws_ec2.SecurityGroup</code> | The egress-only task security group (no inbound). |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBase.property.stackTag">stackTag</a></code> | <code>string</code> | The `kirocrew:fargate` discovery tag value. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.FargateCrewBase.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `cluster`<sup>Required</sup> <a name="cluster" id="@raindancers/raindancers-crew.FargateCrewBase.property.cluster"></a>
+
+```typescript
+public readonly cluster: Cluster;
+```
+
+- *Type:* aws-cdk-lib.aws_ecs.Cluster
+
+The ECS cluster crew tasks run on.
+
+---
+
+##### `cpuArchitecture`<sup>Required</sup> <a name="cpuArchitecture" id="@raindancers/raindancers-crew.FargateCrewBase.property.cpuArchitecture"></a>
+
+```typescript
+public readonly cpuArchitecture: FargateCpuArchitecture;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCpuArchitecture">FargateCpuArchitecture</a>
+
+The architecture crew images must be built for.
+
+---
+
+##### `securityGroup`<sup>Required</sup> <a name="securityGroup" id="@raindancers/raindancers-crew.FargateCrewBase.property.securityGroup"></a>
+
+```typescript
+public readonly securityGroup: SecurityGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SecurityGroup
+
+The egress-only task security group (no inbound).
+
+---
+
+##### `stackTag`<sup>Required</sup> <a name="stackTag" id="@raindancers/raindancers-crew.FargateCrewBase.property.stackTag"></a>
+
+```typescript
+public readonly stackTag: string;
+```
+
+- *Type:* string
+
+The `kirocrew:fargate` discovery tag value.
+
+---
+
+
 ### RemoteCrewInstance <a name="RemoteCrewInstance" id="@raindancers/raindancers-crew.RemoteCrewInstance"></a>
 
 A self-hosted KiroCrew gateway on a single EC2 instance, reached over SSM Session Manager with no inbound ports.
@@ -320,6 +747,188 @@ Required when
 
 ---
 
+### FargateCrewBaseProps <a name="FargateCrewBaseProps" id="@raindancers/raindancers-crew.FargateCrewBaseProps"></a>
+
+Properties for {@link FargateCrewBase}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.FargateCrewBaseProps.Initializer"></a>
+
+```typescript
+import { FargateCrewBaseProps } from '@raindancers/raindancers-crew'
+
+const fargateCrewBaseProps: FargateCrewBaseProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBaseProps.property.vpc">vpc</a></code> | <code>aws-cdk-lib.aws_ec2.IVpc</code> | VPC the crew tasks are placed in. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBaseProps.property.cpuArchitecture">cpuArchitecture</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCpuArchitecture">FargateCpuArchitecture</a></code> | Architecture the crew image was built for. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBaseProps.property.stackTag">stackTag</a></code> | <code>string</code> | Discovery tag value written as `kirocrew:fargate`. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewBaseProps.property.vpcSubnets">vpcSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnets for the tasks' awsvpc network interfaces. |
+
+---
+
+##### `vpc`<sup>Required</sup> <a name="vpc" id="@raindancers/raindancers-crew.FargateCrewBaseProps.property.vpc"></a>
+
+```typescript
+public readonly vpc: IVpc;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.IVpc
+
+VPC the crew tasks are placed in.
+
+---
+
+##### `cpuArchitecture`<sup>Optional</sup> <a name="cpuArchitecture" id="@raindancers/raindancers-crew.FargateCrewBaseProps.property.cpuArchitecture"></a>
+
+```typescript
+public readonly cpuArchitecture: FargateCpuArchitecture;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCpuArchitecture">FargateCpuArchitecture</a>
+- *Default:* FargateCpuArchitecture.X86_64
+
+Architecture the crew image was built for.
+
+Surfaced as an output for the
+launch spec so every placement field is read from a stack, not the
+operator's memory.
+
+---
+
+##### `stackTag`<sup>Optional</sup> <a name="stackTag" id="@raindancers/raindancers-crew.FargateCrewBaseProps.property.stackTag"></a>
+
+```typescript
+public readonly stackTag: string;
+```
+
+- *Type:* string
+- *Default:* 'kirocrew'
+
+Discovery tag value written as `kirocrew:fargate`.
+
+Must match
+`[a-zA-Z0-9-]{1,51}`. The cluster is named `kirocrew-crew-<stackTag>`.
+
+---
+
+##### `vpcSubnets`<sup>Optional</sup> <a name="vpcSubnets" id="@raindancers/raindancers-crew.FargateCrewBaseProps.property.vpcSubnets"></a>
+
+```typescript
+public readonly vpcSubnets: SubnetSelection;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SubnetSelection
+- *Default:* the VPC's private-with-egress subnets
+
+Subnets for the tasks' awsvpc network interfaces.
+
+Each must be able to
+reach the container registry — a NAT-routed private subnet, or a public
+subnet with `assignPublicIp` at RunTask.
+
+Networking is taken, never invented: whether egress is via NAT or a public
+subnet is a property of the operator's VPC this construct cannot discover,
+so it is passed in and echoed as an output for the launch spec.
+
+---
+
+### FargateCrewProps <a name="FargateCrewProps" id="@raindancers/raindancers-crew.FargateCrewProps"></a>
+
+Properties for {@link FargateCrew}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.FargateCrewProps.Initializer"></a>
+
+```typescript
+import { FargateCrewProps } from '@raindancers/raindancers-crew'
+
+const fargateCrewProps: FargateCrewProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.crew">crew</a></code> | <code>string</code> | Crew name: 1–32 chars, lower-case alphanumeric with inner hyphens, never leading or trailing. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.ecrRepositoryArn">ecrRepositoryArn</a></code> | <code>string</code> | ARN of the private ECR repository holding the crew image. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.logRetentionDays">logRetentionDays</a></code> | <code>number</code> | Days a crew's task logs are kept before CloudWatch expires them. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.permissionsBoundaryArn">permissionsBoundaryArn</a></code> | <code>string</code> | ARN of the pre-created shared crew permissions boundary (`arn:aws:iam::<account>:policy/kirocrew-crew-boundary`). |
+
+---
+
+##### `crew`<sup>Required</sup> <a name="crew" id="@raindancers/raindancers-crew.FargateCrewProps.property.crew"></a>
+
+```typescript
+public readonly crew: string;
+```
+
+- *Type:* string
+
+Crew name: 1–32 chars, lower-case alphanumeric with inner hyphens, never leading or trailing.
+
+Every resource name is DERIVED from it — the task
+definition rebuilds the role ARNs and log-group name from the crew name
+and refuses a document whose ARNs disagree, so a rename here is a launch
+refusal, not a silent mismatch.
+
+---
+
+##### `ecrRepositoryArn`<sup>Optional</sup> <a name="ecrRepositoryArn" id="@raindancers/raindancers-crew.FargateCrewProps.property.ecrRepositoryArn"></a>
+
+```typescript
+public readonly ecrRepositoryArn: string;
+```
+
+- *Type:* string
+- *Default:* public registry; no pull grant
+
+ARN of the private ECR repository holding the crew image.
+
+Leave unset when
+the image is pulled from a public registry (the decided delivery, ECR
+Public), which needs no execution-role pull grant. When set, the pull grant
+is scoped to this one repository.
+
+---
+
+##### `logRetentionDays`<sup>Optional</sup> <a name="logRetentionDays" id="@raindancers/raindancers-crew.FargateCrewProps.property.logRetentionDays"></a>
+
+```typescript
+public readonly logRetentionDays: number;
+```
+
+- *Type:* number
+- *Default:* 30
+
+Days a crew's task logs are kept before CloudWatch expires them.
+
+Must be
+one of the CloudWatch retention values.
+
+---
+
+##### `permissionsBoundaryArn`<sup>Optional</sup> <a name="permissionsBoundaryArn" id="@raindancers/raindancers-crew.FargateCrewProps.property.permissionsBoundaryArn"></a>
+
+```typescript
+public readonly permissionsBoundaryArn: string;
+```
+
+- *Type:* string
+- *Default:* no boundary (declared degraded mode)
+
+ARN of the pre-created shared crew permissions boundary (`arn:aws:iam::<account>:policy/kirocrew-crew-boundary`).
+
+Optional by design: this is a DECLARED degraded mode. Unlike the EC2 lane
+(whose boundary is created once by launcher code), no creator exists for
+the crew boundary yet, so rather than reference a policy nothing creates
+this is omitted until that creator lands. When set, it caps what these
+roles can ever do regardless of attached policies.
+
+---
+
 ### RemoteCrewInstanceProps <a name="RemoteCrewInstanceProps" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps"></a>
 
 Properties for {@link RemoteCrewInstance }.
@@ -562,6 +1171,32 @@ The upstream default.
 ##### `X86_64` <a name="X86_64" id="@raindancers/raindancers-crew.CrewArchitecture.X86_64"></a>
 
 64-bit x86.
+
+---
+
+
+### FargateCpuArchitecture <a name="FargateCpuArchitecture" id="@raindancers/raindancers-crew.FargateCpuArchitecture"></a>
+
+CPU architecture a crew container image was built for.
+
+Must match the image:
+a task whose runtime platform disagrees with its image fails at start.
+
+#### Members <a name="Members" id="Members"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.FargateCpuArchitecture.X86_64">X86_64</a></code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.FargateCpuArchitecture.ARM64">ARM64</a></code> | *No description.* |
+
+---
+
+##### `X86_64` <a name="X86_64" id="@raindancers/raindancers-crew.FargateCpuArchitecture.X86_64"></a>
+
+---
+
+
+##### `ARM64` <a name="ARM64" id="@raindancers/raindancers-crew.FargateCpuArchitecture.ARM64"></a>
 
 ---
 
