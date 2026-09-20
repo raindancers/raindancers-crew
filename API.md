@@ -2,6 +2,215 @@
 
 ## Constructs <a name="Constructs" id="Constructs"></a>
 
+### CrewBackupBucket <a name="CrewBackupBucket" id="@raindancers/raindancers-crew.CrewBackupBucket"></a>
+
+- *Implements:* <a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a>
+
+A hardened S3 bucket for KiroCrew snapshot backups.
+
+The snapshot bundle produced by `kirocrew snapshot --purpose backup` is
+already redaction-scrubbed (the signing key, `.env`, and execution logs
+never ship), so this stores portable crew state, not raw secrets. The bucket
+is nonetheless locked down as if it did: SSE-KMS at rest, all public access
+blocked, TLS-only access, versioned so an overwrite cannot destroy history,
+and a lifecycle rule that expires stale noncurrent versions.
+
+Use {@link grantWrite} to let an instance/task role push snapshots, and
+{@link grantRead} to let a replacement instance pull them for restore.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.CrewBackupBucket.Initializer"></a>
+
+```typescript
+import { CrewBackupBucket } from '@raindancers/raindancers-crew'
+
+new CrewBackupBucket(scope: Construct, id: string, props?: CrewBackupBucketProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewBackupBucketProps">CrewBackupBucketProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Optional</sup> <a name="props" id="@raindancers/raindancers-crew.CrewBackupBucket.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewBackupBucketProps">CrewBackupBucketProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.with">with</a></code> | Applies one or more mixins to this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.grantRead">grantRead</a></code> | Grant a principal permission to READ snapshots (and the KMS decrypt it needs). |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.grantWrite">grantWrite</a></code> | Grant a principal permission to WRITE snapshots (and the KMS encrypt it needs). |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.CrewBackupBucket.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.CrewBackupBucket.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.CrewBackupBucket.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+##### `grantRead` <a name="grantRead" id="@raindancers/raindancers-crew.CrewBackupBucket.grantRead"></a>
+
+```typescript
+public grantRead(grantee: IGrantable): void
+```
+
+Grant a principal permission to READ snapshots (and the KMS decrypt it needs).
+
+Used by a replacement instance restoring from backup.
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.CrewBackupBucket.grantRead.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+##### `grantWrite` <a name="grantWrite" id="@raindancers/raindancers-crew.CrewBackupBucket.grantWrite"></a>
+
+```typescript
+public grantWrite(grantee: IGrantable): void
+```
+
+Grant a principal permission to WRITE snapshots (and the KMS encrypt it needs).
+
+Used by the crew instance/task role that pushes backups.
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.CrewBackupBucket.grantWrite.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.CrewBackupBucket.isConstruct"></a>
+
+```typescript
+import { CrewBackupBucket } from '@raindancers/raindancers-crew'
+
+CrewBackupBucket.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.CrewBackupBucket.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.property.bucket">bucket</a></code> | <code>aws-cdk-lib.aws_s3.IBucket</code> | The backup bucket. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucket.property.key">key</a></code> | <code>aws-cdk-lib.aws_kms.Key</code> | The KMS key encrypting the bucket. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.CrewBackupBucket.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `bucket`<sup>Required</sup> <a name="bucket" id="@raindancers/raindancers-crew.CrewBackupBucket.property.bucket"></a>
+
+```typescript
+public readonly bucket: IBucket;
+```
+
+- *Type:* aws-cdk-lib.aws_s3.IBucket
+
+The backup bucket.
+
+---
+
+##### `key`<sup>Required</sup> <a name="key" id="@raindancers/raindancers-crew.CrewBackupBucket.property.key"></a>
+
+```typescript
+public readonly key: Key;
+```
+
+- *Type:* aws-cdk-lib.aws_kms.Key
+
+The KMS key encrypting the bucket.
+
+---
+
+
 ### FargateCrew <a name="FargateCrew" id="@raindancers/raindancers-crew.FargateCrew"></a>
 
 Per-crew Fargate scaffolding for ONE KiroCrew remote crew: the two roles a task carries and the log group it writes to.
@@ -660,6 +869,76 @@ The discovery tag value written as `kirocrew:instance`.
 
 ## Structs <a name="Structs" id="Structs"></a>
 
+### CrewBackupBucketProps <a name="CrewBackupBucketProps" id="@raindancers/raindancers-crew.CrewBackupBucketProps"></a>
+
+Properties for {@link CrewBackupBucket}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewBackupBucketProps.Initializer"></a>
+
+```typescript
+import { CrewBackupBucketProps } from '@raindancers/raindancers-crew'
+
+const crewBackupBucketProps: CrewBackupBucketProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucketProps.property.bucketName">bucketName</a></code> | <code>string</code> | Explicit bucket name. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucketProps.property.noncurrentVersionExpirationDays">noncurrentVersionExpirationDays</a></code> | <code>number</code> | Days after which a NONCURRENT snapshot version is expired. |
+| <code><a href="#@raindancers/raindancers-crew.CrewBackupBucketProps.property.removalPolicy">removalPolicy</a></code> | <code>aws-cdk-lib.RemovalPolicy</code> | What happens to the bucket when the stack is destroyed. |
+
+---
+
+##### `bucketName`<sup>Optional</sup> <a name="bucketName" id="@raindancers/raindancers-crew.CrewBackupBucketProps.property.bucketName"></a>
+
+```typescript
+public readonly bucketName: string;
+```
+
+- *Type:* string
+- *Default:* CloudFormation-generated
+
+Explicit bucket name.
+
+Omit to let CloudFormation generate one.
+
+---
+
+##### `noncurrentVersionExpirationDays`<sup>Optional</sup> <a name="noncurrentVersionExpirationDays" id="@raindancers/raindancers-crew.CrewBackupBucketProps.property.noncurrentVersionExpirationDays"></a>
+
+```typescript
+public readonly noncurrentVersionExpirationDays: number;
+```
+
+- *Type:* number
+- *Default:* 90
+
+Days after which a NONCURRENT snapshot version is expired.
+
+Current
+versions are always kept. Set 0 to keep all versions forever.
+
+---
+
+##### `removalPolicy`<sup>Optional</sup> <a name="removalPolicy" id="@raindancers/raindancers-crew.CrewBackupBucketProps.property.removalPolicy"></a>
+
+```typescript
+public readonly removalPolicy: RemovalPolicy;
+```
+
+- *Type:* aws-cdk-lib.RemovalPolicy
+- *Default:* RemovalPolicy.RETAIN
+
+What happens to the bucket when the stack is destroyed.
+
+Defaults to
+RETAIN — the whole point is that the crew's learnings outlive the
+instance, so the backup must outlive a stack teardown too.
+
+---
+
 ### CrewSource <a name="CrewSource" id="@raindancers/raindancers-crew.CrewSource"></a>
 
 How the KiroCrew source is delivered to the instance at first boot.
@@ -853,6 +1132,7 @@ const fargateCrewProps: FargateCrewProps = { ... }
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
 | <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.crew">crew</a></code> | <code>string</code> | Crew name: 1–32 chars, lower-case alphanumeric with inner hyphens, never leading or trailing. |
+| <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.backupBucket">backupBucket</a></code> | <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a></code> | An S3 backup bucket to grant the TASK role write access to, so the running crew container can push `kirocrew snapshot` bundles off-box on its own schedule. |
 | <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.ecrRepositoryArn">ecrRepositoryArn</a></code> | <code>string</code> | ARN of the private ECR repository holding the crew image. |
 | <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.logRetentionDays">logRetentionDays</a></code> | <code>number</code> | Days a crew's task logs are kept before CloudWatch expires them. |
 | <code><a href="#@raindancers/raindancers-crew.FargateCrewProps.property.permissionsBoundaryArn">permissionsBoundaryArn</a></code> | <code>string</code> | ARN of the pre-created shared crew permissions boundary (`arn:aws:iam::<account>:policy/kirocrew-crew-boundary`). |
@@ -873,6 +1153,22 @@ Every resource name is DERIVED from it — the task
 definition rebuilds the role ARNs and log-group name from the crew name
 and refuses a document whose ARNs disagree, so a rename here is a launch
 refusal, not a silent mismatch.
+
+---
+
+##### `backupBucket`<sup>Optional</sup> <a name="backupBucket" id="@raindancers/raindancers-crew.FargateCrewProps.property.backupBucket"></a>
+
+```typescript
+public readonly backupBucket: ICrewBackupBucket;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a>
+- *Default:* no off-box backup grant
+
+An S3 backup bucket to grant the TASK role write access to, so the running crew container can push `kirocrew snapshot` bundles off-box on its own schedule.
+
+The task role (not the execution role) gets this, because the
+push runs inside the container. Omit to disable off-box backup.
 
 ---
 
@@ -950,6 +1246,9 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.allowSshCidr">allowSshCidr</a></code> | <code>string</code> | Optional SSH ingress CIDR. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.architecture">architecture</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewArchitecture">CrewArchitecture</a></code> | CPU architecture. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.associatePublicIp">associatePublicIp</a></code> | <code>boolean</code> | Attach a public IP to the instance ENI. |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupBucket">backupBucket</a></code> | <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a></code> | An S3 backup bucket to push crew snapshots to on a schedule. |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupPrefix">backupPrefix</a></code> | <code>string</code> | S3 key prefix under which snapshots are stored in the backup bucket. |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupSchedule">backupSchedule</a></code> | <code>string</code> | systemd OnCalendar expression for the backup timer (see `man systemd.time`). Only used when {@link backupBucket} is set. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.bootstrapTimeoutMinutes">bootstrapTimeoutMinutes</a></code> | <code>number</code> | Minutes to wait for the gateway to become healthy before the stack fails and rolls back (cold boot + dnf + Node + vite build + pip). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.dashboardPort">dashboardPort</a></code> | <code>number</code> | TCP port the gateway serves the dashboard on (loopback only; |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.instanceType">instanceType</a></code> | <code>aws-cdk-lib.aws_ec2.InstanceType</code> | EC2 instance type. |
@@ -1033,6 +1332,54 @@ Attach a public IP to the instance ENI.
 Required for egress on IGW-only
 subnets; leave off (false) for NAT-routed private subnets, where it is
 unused attack surface.
+
+---
+
+##### `backupBucket`<sup>Optional</sup> <a name="backupBucket" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupBucket"></a>
+
+```typescript
+public readonly backupBucket: ICrewBackupBucket;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a>
+- *Default:* no off-box backup
+
+An S3 backup bucket to push crew snapshots to on a schedule.
+
+When set, the
+instance role is granted write, a systemd timer runs
+`kirocrew snapshot --purpose backup` and uploads the newest (redaction-
+scrubbed) bundle, and a `kirocrew-restore-from-s3` helper is installed for
+rebuilding a replacement instance. Omit to disable off-box backup.
+
+---
+
+##### `backupPrefix`<sup>Optional</sup> <a name="backupPrefix" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupPrefix"></a>
+
+```typescript
+public readonly backupPrefix: string;
+```
+
+- *Type:* string
+- *Default:* 'crew-snapshots/'
+
+S3 key prefix under which snapshots are stored in the backup bucket.
+
+Only used when {@link backupBucket} is set. A trailing slash is added if
+absent.
+
+---
+
+##### `backupSchedule`<sup>Optional</sup> <a name="backupSchedule" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupSchedule"></a>
+
+```typescript
+public readonly backupSchedule: string;
+```
+
+- *Type:* string
+- *Default:* 'daily'
+
+systemd OnCalendar expression for the backup timer (see `man systemd.time`). Only used when {@link backupBucket} is set.
 
 ---
 
@@ -1140,6 +1487,73 @@ public IP for egress; a private (NAT-routed) subnet does not — see
 ---
 
 
+## Protocols <a name="Protocols" id="Protocols"></a>
+
+### ICrewBackupBucket <a name="ICrewBackupBucket" id="@raindancers/raindancers-crew.ICrewBackupBucket"></a>
+
+- *Implemented By:* <a href="#@raindancers/raindancers-crew.CrewBackupBucket">CrewBackupBucket</a>, <a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a>
+
+The subset of {@link CrewBackupBucket } the EC2/Fargate constructs need.
+
+Kept
+as an interface so a consumer can pass their own bucket wrapper.
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket.grantRead">grantRead</a></code> | Grant a principal read access to snapshots (bucket + KMS). |
+| <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket.grantWrite">grantWrite</a></code> | Grant a principal write access to snapshots (bucket + KMS). |
+
+---
+
+##### `grantRead` <a name="grantRead" id="@raindancers/raindancers-crew.ICrewBackupBucket.grantRead"></a>
+
+```typescript
+public grantRead(grantee: IGrantable): void
+```
+
+Grant a principal read access to snapshots (bucket + KMS).
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.ICrewBackupBucket.grantRead.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+##### `grantWrite` <a name="grantWrite" id="@raindancers/raindancers-crew.ICrewBackupBucket.grantWrite"></a>
+
+```typescript
+public grantWrite(grantee: IGrantable): void
+```
+
+Grant a principal write access to snapshots (bucket + KMS).
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.ICrewBackupBucket.grantWrite.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket.property.bucket">bucket</a></code> | <code>aws-cdk-lib.aws_s3.IBucket</code> | The destination bucket name. |
+
+---
+
+##### `bucket`<sup>Required</sup> <a name="bucket" id="@raindancers/raindancers-crew.ICrewBackupBucket.property.bucket"></a>
+
+```typescript
+public readonly bucket: IBucket;
+```
+
+- *Type:* aws-cdk-lib.aws_s3.IBucket
+
+The destination bucket name.
+
+---
 
 ## Enums <a name="Enums" id="Enums"></a>
 

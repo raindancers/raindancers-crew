@@ -2,6 +2,7 @@ import { Aws, Tags } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
+import { ICrewBackupBucket } from './remote-crew-instance-props';
 
 // Mirrors _CREW_RE in the upstream cloud/fargate/identity.py exactly. A
 // trailing hyphen would make the derived role end in "--exec"; a leading one is
@@ -60,6 +61,16 @@ export interface FargateCrewProps {
    * @default - public registry; no pull grant
    */
   readonly ecrRepositoryArn?: string;
+
+  /**
+   * An S3 backup bucket to grant the TASK role write access to, so the running
+   * crew container can push `kirocrew snapshot` bundles off-box on its own
+   * schedule. The task role (not the execution role) gets this, because the
+   * push runs inside the container. Omit to disable off-box backup.
+   *
+   * @default - no off-box backup grant
+   */
+  readonly backupBucket?: ICrewBackupBucket;
 }
 
 /**
@@ -197,6 +208,14 @@ export class FargateCrew extends Construct {
       assumedBy,
       permissionsBoundary: boundary,
     });
+
+    // Off-box backup: the RUNNING container pushes snapshots, so the grant goes
+    // on the task role. It stays scoped to the backup bucket + its KMS key —
+    // this does not reintroduce any secret-read the task role is denied.
+    if (props.backupBucket) {
+      props.backupBucket.grantWrite(this.taskRole);
+      props.backupBucket.grantRead(this.taskRole);
+    }
 
     for (const taggable of [this.logGroup, this.executionRole, this.taskRole]) {
       Tags.of(taggable).add('kirocrew:managed', 'true');

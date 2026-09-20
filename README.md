@@ -62,6 +62,36 @@ Security invariants preserved from upstream: task role has no policies and never
 
 **EC2 vs Fargate:** EC2 gives a persistent box with local disk (the crew's memory/knowledge DBs live on the instance) and is the native launcher's default; Fargate is more ephemeral and expects external persistence. For a remote crew that remembers across sessions, EC2 is usually the better fit.
 
+## Backing up the crew's learnings
+
+A remote crew's value is its accumulated memory, lessons, and knowledge — which on the EC2 lane live on the instance's local disk. KiroCrew's built-in backup (`kirocrew snapshot`) produces a redaction-scrubbed bundle (the signing key, `.env`, and execution logs never ship), but writes it **locally** — so it survives corruption, not instance loss. These constructs add the missing **off-box durability**.
+
+`CrewBackupBucket` provisions a hardened destination: SSE-KMS (rotating key), all public access blocked, TLS-only, **versioned**, with a lifecycle rule expiring stale noncurrent versions. Bucket and key `RETAIN` on stack delete, so the backups outlive a teardown.
+
+```ts
+import { CrewBackupBucket, RemoteCrewInstance } from '@raindancers/raindancers-crew';
+
+const backup = new CrewBackupBucket(this, 'CrewBackup');
+
+new RemoteCrewInstance(this, 'Crew', {
+  vpc,
+  permissionsBoundaryArn: '...',
+  backupBucket: backup,          // grants scoped write + installs a daily timer
+  backupSchedule: 'daily',       // systemd OnCalendar
+});
+```
+
+On the **EC2 lane** this grants the instance role scoped write, installs a **systemd timer** that runs `kirocrew snapshot --purpose backup` and uploads the newest bundle to S3 (a timestamped key for history plus a stable `latest.tar`), and installs a `kirocrew-restore-from-s3` helper. On the **Fargate lane**, pass the same bucket to `FargateCrew` — it grants the **task role** (the running container) write, since the container runs its own snapshot push.
+
+### Restore (rebuilding a replacement crew)
+
+`kirocrew restore <bundle> --mode replace|merge`:
+
+- **replace** clears the target's memory/knowledge trees and rebuilds them from the bundle (the knowledge DB and memory stores are replaced wholesale, not row-merged). Restore validates database integrity and refuses a truncated bundle; `sel_hmac.key` is regenerated (not restored). Use on a fresh replacement instance.
+- **merge** layers the bundle onto existing state without clearing. Use to seed a crew you want to keep.
+
+On an EC2 instance provisioned with a backup bucket, `sudo kirocrew-restore-from-s3` pulls `latest.tar`, stops the gateway, restores in **replace** mode, and restarts — a one-command rebuild.
+
 ## License
 
 Apache-2.0

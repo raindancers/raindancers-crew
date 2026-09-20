@@ -3,6 +3,7 @@ import * as path from 'path';
 import {
   CfnWaitCondition,
   CfnWaitConditionHandle,
+  Stack,
   Tags,
   Token,
 } from 'aws-cdk-lib';
@@ -140,8 +141,72 @@ export class RemoteCrewInstance extends Construct {
       'KIROCREW_REPO=' + shellQuote(source.kirocrewRepo ?? DEFAULT_REPO),
       'KIROCREW_REF=' + shellQuote(source.kirocrewRef ?? DEFAULT_REF),
       'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF',
-      bootstrapBody,
     );
+
+    // --- Off-box backup wiring (only when a backup bucket is configured).
+    if (props.backupBucket) {
+      props.backupBucket.grantWrite(this.role);
+      props.backupBucket.grantRead(this.role); // read too, so this box can self-restore
+      let prefix = props.backupPrefix ?? 'crew-snapshots/';
+      if (!prefix.endsWith('/')) {
+        prefix = `${prefix}/`;
+      }
+      const schedule = props.backupSchedule ?? 'daily';
+      const region = Stack.of(this).region;
+      const backupBody = fs.readFileSync(resolveAsset('backup.sh'), 'utf8');
+      const restoreBody = fs.readFileSync(resolveAsset('restore-from-s3.sh'), 'utf8');
+      userData.addCommands(
+        // Header the backup + restore scripts read.
+        'BACKUP_BUCKET=' + shellQuote(props.backupBucket.bucket.bucketName),
+        'BACKUP_PREFIX=' + shellQuote(prefix),
+        'AWS_REGION_ARG=' + shellQuote(Token.isUnresolved(region) ? '' : `--region ${region}`),
+        'export BACKUP_BUCKET BACKUP_PREFIX AWS_REGION_ARG',
+        // Install the backup script.
+        "cat > /usr/local/sbin/kirocrew-backup <<'KCBACKUP'",
+        backupBody,
+        'KCBACKUP',
+        'chmod 0755 /usr/local/sbin/kirocrew-backup',
+        // The backup/restore scripts need the header env at RUN time (the timer
+        // runs them fresh), so bake it into an env file both units read.
+        'mkdir -p /etc/kirocrew',
+        'cat > /etc/kirocrew/backup.env <<KCENV',
+        `BACKUP_BUCKET=${props.backupBucket.bucket.bucketName}`,
+        `BACKUP_PREFIX=${prefix}`,
+        `AWS_REGION_ARG=${Token.isUnresolved(region) ? '' : `--region ${region}`}`,
+        'KCENV',
+        // Install the restore helper.
+        "cat > /usr/local/sbin/kirocrew-restore-from-s3 <<'KCRESTORE'",
+        restoreBody,
+        'KCRESTORE',
+        'chmod 0755 /usr/local/sbin/kirocrew-restore-from-s3',
+        // systemd service + timer for the scheduled backup.
+        'cat > /etc/systemd/system/kirocrew-backup.service <<UNIT',
+        '[Unit]',
+        'Description=KiroCrew snapshot-to-S3 backup',
+        'After=kirocrew.service',
+        '',
+        '[Service]',
+        'Type=oneshot',
+        'EnvironmentFile=/etc/kirocrew/backup.env',
+        'ExecStart=/usr/local/sbin/kirocrew-backup',
+        'UNIT',
+        'cat > /etc/systemd/system/kirocrew-backup.timer <<UNIT',
+        '[Unit]',
+        'Description=Run KiroCrew snapshot-to-S3 backup on a schedule',
+        '',
+        '[Timer]',
+        `OnCalendar=${schedule}`,
+        'Persistent=true',
+        '',
+        '[Install]',
+        'WantedBy=timers.target',
+        'UNIT',
+        'systemctl daemon-reload',
+        'systemctl enable --now kirocrew-backup.timer || true',
+      );
+    }
+
+    userData.addCommands(bootstrapBody);
 
     // --- The instance. IMDSv2 enforced (prompt-injectable agent must not be
     // able to read role creds via IMDSv1), encrypted gp3 root.

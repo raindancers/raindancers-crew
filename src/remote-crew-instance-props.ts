@@ -1,4 +1,6 @@
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 /**
  * CPU architecture for the KiroCrew EC2 instance. Selects the matching
@@ -152,4 +154,45 @@ export interface RemoteCrewInstanceProps {
    * @default 25
    */
   readonly bootstrapTimeoutMinutes?: number;
+
+  /**
+   * An S3 backup bucket to push crew snapshots to on a schedule. When set, the
+   * instance role is granted write, a systemd timer runs
+   * `kirocrew snapshot --purpose backup` and uploads the newest (redaction-
+   * scrubbed) bundle, and a `kirocrew-restore-from-s3` helper is installed for
+   * rebuilding a replacement instance. Omit to disable off-box backup.
+   *
+   * @default - no off-box backup
+   */
+  readonly backupBucket?: ICrewBackupBucket;
+
+  /**
+   * systemd OnCalendar expression for the backup timer (see
+   * `man systemd.time`). Only used when {@link backupBucket} is set.
+   *
+   * @default 'daily'
+   */
+  readonly backupSchedule?: string;
+
+  /**
+   * S3 key prefix under which snapshots are stored in the backup bucket.
+   * Only used when {@link backupBucket} is set. A trailing slash is added if
+   * absent.
+   *
+   * @default 'crew-snapshots/'
+   */
+  readonly backupPrefix?: string;
+}
+
+/**
+ * The subset of {@link CrewBackupBucket} the EC2/Fargate constructs need. Kept
+ * as an interface so a consumer can pass their own bucket wrapper.
+ */
+export interface ICrewBackupBucket {
+  /** The destination bucket name. */
+  readonly bucket: s3.IBucket;
+  /** Grant a principal write access to snapshots (bucket + KMS). */
+  grantWrite(grantee: iam.IGrantable): void;
+  /** Grant a principal read access to snapshots (bucket + KMS). */
+  grantRead(grantee: iam.IGrantable): void;
 }
