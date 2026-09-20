@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  CfnOutput,
   CfnWaitCondition,
   CfnWaitConditionHandle,
   Stack,
@@ -249,6 +250,21 @@ export class RemoteCrewInstance extends Construct {
     waitCondition.addDependency(
       this.instance.node.defaultChild as ec2.CfnInstance,
     );
+
+    // Outputs so the connect step can read the instance id from the stack.
+    // Export names are derived from the stack tag so they are predictable for a
+    // `describe-stacks` / cross-stack lookup (the generated logical id is
+    // scope-prefixed and hashed, so match on the export name, not the id).
+    new CfnOutput(this, 'CrewInstanceId', {
+      value: this.instance.instanceId,
+      description: 'EC2 instance id — the SSM target for connecting.',
+      exportName: `kirocrew-${stackTag}-instance-id`,
+    });
+    new CfnOutput(this, 'CrewPublicDnsName', {
+      value: this.instance.instancePublicDnsName,
+      description: 'Public DNS (diagnostics only; access is via SSM, never direct).',
+      exportName: `kirocrew-${stackTag}-public-dns`,
+    });
   }
 
   /** Public DNS of the instance (diagnostics only; access is via SSM). */

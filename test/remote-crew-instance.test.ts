@@ -135,6 +135,12 @@ describe('RemoteCrewInstance', () => {
     });
   });
 
+  test('emits an instance-id output with a stable export name', () => {
+    synth({ stackTag: 'fiftyfive' }).hasOutput('*', {
+      Export: { Name: 'kirocrew-fiftyfive-instance-id' },
+    });
+  });
+
   test('bundled bootstrap asset ships under src/assets (consumer path)', () => {
     // Regression guard: the construct reads bootstrap.sh at runtime relative
     // to the package root. jsii/tsc does NOT copy non-TS files into lib/, so
