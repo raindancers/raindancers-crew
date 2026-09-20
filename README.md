@@ -4,20 +4,120 @@ A CDK construct that provisions a **self-hosted [KiroCrew](https://github.com/ki
 
 It is a pipeline-native, version-controlled port of the upstream `kirocrew-ec2` CloudFormation template. Where the native `kirocrew cloud launch` is an imperative one-shot, this construct lets you deploy the same shape **through your own CDK pipeline**, under **your** naming, permissions boundary, and OIDC deploy role — so a remote crew becomes a reviewed, repeatable, diffable artifact like everything else you ship.
 
-## Usage
+## Getting started
+
+### 1. Install
+
+```bash
+npm install @raindancers/raindancers-crew
+```
+
+The package targets `aws-cdk-lib` ^2.260.0 and `constructs` ^10 (peer dependencies — your app supplies them).
+
+### 2. Define a stack
+
+A complete stack that stands up an EC2 crew with off-box backup. Everything is
+typed and compiles as-is — fill in your account, region, VPC lookup, and
+permissions-boundary ARN.
 
 ```ts
-import { RemoteCrewInstance, CrewArchitecture } from '@raindancers/raindancers-crew';
+import { App, Stack, StackProps } from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { Construct } from 'constructs';
+import {
+  RemoteCrewInstance,
+  CrewArchitecture,
+  CrewBackupBucket,
+} from '@raindancers/raindancers-crew';
 
-new RemoteCrewInstance(this, 'Crew', {
-  vpc,
-  permissionsBoundaryArn: 'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
-  architecture: CrewArchitecture.ARM64,
-  instanceType: new ec2.InstanceType('m7g.2xlarge'),
-  // Pin a released tag for reproducible deploys — defaults to `main`, which drifts.
-  source: { kirocrewRef: 'v0.8.0' },
+class CrewStack extends Stack {
+  constructor(scope: Construct, id: string, props: StackProps) {
+    super(scope, id, props);
+
+    // Your existing VPC (or ec2.Vpc.fromLookup(...)).
+    const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { isDefault: true });
+
+    // Durable, versioned, KMS-encrypted backup destination.
+    const backup = new CrewBackupBucket(this, 'CrewBackup');
+
+    new RemoteCrewInstance(this, 'Crew', {
+      vpc,
+      // REQUIRED: the instance runs a prompt-injectable agent, so its role
+      // must be capped by a permissions boundary you pre-create.
+      permissionsBoundaryArn:
+        'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+      architecture: CrewArchitecture.ARM64,
+      instanceType: new ec2.InstanceType('m7g.2xlarge'),
+      // Pin a released tag for reproducible deploys — the default `main` drifts.
+      source: { kirocrewRef: 'v0.8.0' },
+      // Off-box backup: grants scoped write + installs a daily snapshot timer.
+      backupBucket: backup,
+      backupSchedule: 'daily',
+    });
+  }
+}
+
+const app = new App();
+new CrewStack(app, 'RemoteCrew', {
+  env: { account: '123456789012', region: 'eu-west-2' },
 });
+app.synth();
 ```
+
+### 3. Deploy through your pipeline
+
+This is a plain CDK stack — deploy it however you deploy everything else
+(a CDK Pipelines / agentl stage, or `cdk deploy` from a keyless-OIDC CI job).
+The `WaitCondition` blocks stack completion until the gateway is actually
+serving, so a green deploy means a live crew (and a failed bootstrap rolls the
+stack back with the setup-log tail in the failure reason).
+
+```bash
+cdk deploy RemoteCrew
+```
+
+### 4. Connect
+
+Access is **SSM-only** — no inbound ports. Open a port-forward to the
+loopback dashboard and browse `http://127.0.0.1:5476`:
+
+```bash
+# The construct exports the instance id under a stable name derived from the
+# stackTag (default 'kirocrew'): kirocrew-<stackTag>-instance-id
+INSTANCE_ID=$(aws cloudformation list-exports \
+  --query "Exports[?Name=='kirocrew-kirocrew-instance-id'].Value" --output text)
+
+aws ssm start-session --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["5476"],"localPortNumber":["5476"]}'
+```
+
+(Or use the upstream `kirocrew cloud connect`, which mints the dashboard token
+on the box and opens the tunnel for you.)
+
+### 5. Verify backup
+
+The daily timer pushes a redaction-scrubbed snapshot to the backup bucket. Fire
+one immediately and confirm it landed:
+
+```bash
+# On the instance (via SSM Session Manager):
+sudo systemctl start kirocrew-backup.service
+sudo journalctl -u kirocrew-backup.service --no-pager | tail
+
+# From your workstation — the stable key a replacement instance restores from:
+aws s3 ls "s3://<backup-bucket>/crew-snapshots/latest.tar"
+```
+
+To rebuild a **replacement** instance from backup, deploy a fresh `CrewStack`
+pointing at the same bucket, then on the new box run
+`sudo kirocrew-restore-from-s3` (pulls `latest.tar`, stops the gateway,
+restores in replace mode, restarts).
+
+> **Container crew instead of an instance?** See [Fargate lane](#fargate-lane)
+> below — swap `RemoteCrewInstance` for `FargateCrewBase` + `FargateCrew`.
+
+The sections below are the per-construct reference.
 
 ## What it creates
 
