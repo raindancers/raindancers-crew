@@ -156,6 +156,15 @@ export class RemoteCrewInstance extends Construct {
       'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF WEBHOOK_TOKEN_SECRET_ARN',
     );
 
+    // --- Always-on crew runtime (RC4): autopilot + no-idle-close, threaded
+    // into config.json at boot. Empty => current gateway defaults, unchanged.
+    userData.addCommands(
+      'CREW_AUTOPILOT=' + shellQuote(props.crewRuntime?.autopilot ? '1' : ''),
+      'CREW_DISABLE_IDLE_CLOSE=' +
+        shellQuote(props.crewRuntime?.disableIdleClose ? '1' : ''),
+      'export CREW_AUTOPILOT CREW_DISABLE_IDLE_CLOSE',
+    );
+
     // --- Webhook Bearer token: grant GetSecretValue on the one ARN only; the
     // token is fetched at boot and written into config.json (RC3). Loopback-
     // only bind is unchanged — routable exposure is a consumer concern.

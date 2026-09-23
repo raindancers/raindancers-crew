@@ -90,6 +90,38 @@ export interface WebhookIngress {
 }
 
 /**
+ * Always-on runtime settings for the hosted crew, threaded into the crew
+ * `config.json` at boot. All fields are optional and default to the current
+ * gateway behaviour; omitting {@link RemoteCrewInstanceProps.crewRuntime}
+ * entirely reproduces today's `kirocrew setup --agent-only` + `kirocrew
+ * gateway` exactly.
+ *
+ * Verified against KiroCrew v0.6.0: autopilot maps to `agent.approval_mode`,
+ * idle-close maps to `session.timeout_secs`, and the conductor roster ships
+ * with `setup --agent-only` (custom members are source-delivered JSON under
+ * `~/.kiro/agents/`).
+ */
+export interface CrewRuntime {
+  /**
+   * Enable Autopilot: the hosted crew auto-approves tool calls that pass its
+   * security checks (deny rules and sensitive-path blocks still apply). Sets
+   * `agent.approval_mode` to `"auto"` in config.json.
+   *
+   * @default false (interactive; gateway default)
+   */
+  readonly autopilot?: boolean;
+
+  /**
+   * Keep the 24/7 brain session alive between events by disabling the idle
+   * session sweep. Sets `session.timeout_secs` to `0` (documented: "0 disables
+   * the idle sweep").
+   *
+   * @default false (default 3600s idle timeout applies)
+   */
+  readonly disableIdleClose?: boolean;
+}
+
+/**
  * Properties for {@link RemoteCrewInstance}.
  */
 export interface RemoteCrewInstanceProps {
@@ -217,6 +249,14 @@ export interface RemoteCrewInstanceProps {
    * @default - webhook auth not configured (loopback / SSM only)
    */
   readonly webhookTokenSecretArn?: string;
+
+  /**
+   * Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew,
+   * threaded into config.json at boot. Omit for the current gateway defaults.
+   *
+   * @default - current gateway behaviour (interactive, 3600s idle timeout)
+   */
+  readonly crewRuntime?: CrewRuntime;
 
   /**
    * How the KiroCrew source reaches the instance (S3 tarball or git clone).

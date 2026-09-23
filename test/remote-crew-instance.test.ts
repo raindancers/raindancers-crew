@@ -397,4 +397,58 @@ describe('RemoteCrewInstance', () => {
       expect(body).toContain('WEBHOOK_TOKEN="$WEBHOOK_TOKEN"');
     });
   });
+
+  // --- RC4: always-on crew runtime (autopilot / no-idle-close).
+  describe('RC4 crew runtime', () => {
+    function renderUserData(overrides?: Record<string, unknown>) {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        ...(overrides as object),
+      });
+      return JSON.stringify(stack.resolve(crew.instance.userData.render()));
+    }
+
+    test('autopilot sets the CREW_AUTOPILOT substitution', () => {
+      const json = renderUserData({ crewRuntime: { autopilot: true } });
+      expect(json).toContain("CREW_AUTOPILOT='1'");
+    });
+
+    test('disableIdleClose sets the CREW_DISABLE_IDLE_CLOSE substitution', () => {
+      const json = renderUserData({ crewRuntime: { disableIdleClose: true } });
+      expect(json).toContain("CREW_DISABLE_IDLE_CLOSE='1'");
+    });
+
+    test('no crewRuntime leaves both flags empty (golden default)', () => {
+      const json = renderUserData();
+      expect(json).toContain("CREW_AUTOPILOT=''");
+      expect(json).toContain("CREW_DISABLE_IDLE_CLOSE=''");
+    });
+
+    test('bootstrap.sh maps the flags to the verified config keys', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path');
+      const body = fs.readFileSync(
+        path.join(__dirname, '..', 'src', 'assets', 'bootstrap.sh'),
+        'utf8',
+      );
+      // Guarded on the flags so the no-prop render is unchanged.
+      expect(body).toContain(
+        'if [ -n "${CREW_AUTOPILOT:-}" ] || [ -n "${CREW_DISABLE_IDLE_CLOSE:-}" ]; then',
+      );
+      // Verified v0.6.0 config keys.
+      expect(body).toContain('agent');
+      expect(body).toContain('approval_mode');
+      expect(body).toContain('"auto"');
+      expect(body).toContain('session');
+      expect(body).toContain('timeout_secs');
+    });
+  });
 });

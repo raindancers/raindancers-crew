@@ -939,6 +939,64 @@ instance, so the backup must outlive a stack teardown too.
 
 ---
 
+### CrewRuntime <a name="CrewRuntime" id="@raindancers/raindancers-crew.CrewRuntime"></a>
+
+Always-on runtime settings for the hosted crew, threaded into the crew `config.json` at boot. All fields are optional and default to the current gateway behaviour; omitting {@link RemoteCrewInstanceProps.crewRuntime} entirely reproduces today's `kirocrew setup --agent-only` + `kirocrew gateway` exactly.
+
+Verified against KiroCrew v0.6.0: autopilot maps to `agent.approval_mode`,
+idle-close maps to `session.timeout_secs`, and the conductor roster ships
+with `setup --agent-only` (custom members are source-delivered JSON under
+`~/.kiro/agents/`).
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewRuntime.Initializer"></a>
+
+```typescript
+import { CrewRuntime } from '@raindancers/raindancers-crew'
+
+const crewRuntime: CrewRuntime = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRuntime.property.autopilot">autopilot</a></code> | <code>boolean</code> | Enable Autopilot: the hosted crew auto-approves tool calls that pass its security checks (deny rules and sensitive-path blocks still apply). |
+| <code><a href="#@raindancers/raindancers-crew.CrewRuntime.property.disableIdleClose">disableIdleClose</a></code> | <code>boolean</code> | Keep the 24/7 brain session alive between events by disabling the idle session sweep. |
+
+---
+
+##### `autopilot`<sup>Optional</sup> <a name="autopilot" id="@raindancers/raindancers-crew.CrewRuntime.property.autopilot"></a>
+
+```typescript
+public readonly autopilot: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false (interactive; gateway default)
+
+Enable Autopilot: the hosted crew auto-approves tool calls that pass its security checks (deny rules and sensitive-path blocks still apply).
+
+Sets
+`agent.approval_mode` to `"auto"` in config.json.
+
+---
+
+##### `disableIdleClose`<sup>Optional</sup> <a name="disableIdleClose" id="@raindancers/raindancers-crew.CrewRuntime.property.disableIdleClose"></a>
+
+```typescript
+public readonly disableIdleClose: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false (default 3600s idle timeout applies)
+
+Keep the 24/7 brain session alive between events by disabling the idle session sweep.
+
+Sets `session.timeout_secs` to `0` (documented: "0 disables
+the idle sweep").
+
+---
+
 ### CrewSource <a name="CrewSource" id="@raindancers/raindancers-crew.CrewSource"></a>
 
 How the KiroCrew source is delivered to the instance at first boot.
@@ -1250,6 +1308,7 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupPrefix">backupPrefix</a></code> | <code>string</code> | S3 key prefix under which snapshots are stored in the backup bucket. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupSchedule">backupSchedule</a></code> | <code>string</code> | systemd OnCalendar expression for the backup timer (see `man systemd.time`). Only used when {@link backupBucket} is set. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.bootstrapTimeoutMinutes">bootstrapTimeoutMinutes</a></code> | <code>number</code> | Minutes to wait for the gateway to become healthy before the stack fails and rolls back (cold boot + dnf + Node + vite build + pip). |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.crewRuntime">crewRuntime</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewRuntime">CrewRuntime</a></code> | Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew, threaded into config.json at boot. Omit for the current gateway defaults. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.dashboardPort">dashboardPort</a></code> | <code>number</code> | TCP port the gateway serves the dashboard on (loopback only; |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.enableIpv6">enableIpv6</a></code> | <code>boolean</code> | Assign an IPv6 address to the instance's primary ENI and permit IPv6 egress on the security group. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.instanceType">instanceType</a></code> | <code>aws-cdk-lib.aws_ec2.InstanceType</code> | EC2 instance type. |
@@ -1396,6 +1455,19 @@ public readonly bootstrapTimeoutMinutes: number;
 - *Default:* 25
 
 Minutes to wait for the gateway to become healthy before the stack fails and rolls back (cold boot + dnf + Node + vite build + pip).
+
+---
+
+##### `crewRuntime`<sup>Optional</sup> <a name="crewRuntime" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.crewRuntime"></a>
+
+```typescript
+public readonly crewRuntime: CrewRuntime;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewRuntime">CrewRuntime</a>
+- *Default:* current gateway behaviour (interactive, 3600s idle timeout)
+
+Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew, threaded into config.json at boot. Omit for the current gateway defaults.
 
 ---
 
