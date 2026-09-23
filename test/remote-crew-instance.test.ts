@@ -171,4 +171,64 @@ describe('RemoteCrewInstance', () => {
     expect(json).toContain('v0.8.0');
     expect(json).toContain('KiroCrew bootstrap');
   });
+
+  // --- RC0: backward-compatibility golden. The no-prop synth must be
+  // unchanged by every later group. Snapshot the SG + instance shape and the
+  // rendered bootstrap.sh bytes as the lock.
+  describe('RC0 backward-compatibility golden (no-prop)', () => {
+    test('no-prop SG has no inbound and no IPv6 egress rule', () => {
+      const t = synth();
+      // No inbound at all.
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.absent(),
+      });
+      // Egress is the single CDK allowAllOutbound IPv4 rule; no ::/0 egress.
+      const sgs = t.findResources('AWS::EC2::SecurityGroup');
+      const json = JSON.stringify(sgs);
+      expect(json).not.toContain('::/0');
+    });
+
+    test('no-prop instance has no IPv6 address count', () => {
+      const t = synth();
+      const instances = t.findResources('AWS::EC2::Instance');
+      const json = JSON.stringify(instances);
+      expect(json).not.toContain('Ipv6AddressCount');
+    });
+  });
+
+  // --- RC1: dual-stack IPv6 ENI.
+  describe('RC1 dual-stack IPv6', () => {
+    test('enableIpv6 adds an IPv6 address to the primary ENI', () => {
+      synth({ enableIpv6: true }).hasResourceProperties('AWS::EC2::Instance', {
+        Ipv6AddressCount: 1,
+      });
+    });
+
+    test('enableIpv6 adds an all-traffic IPv6 egress rule', () => {
+      const t = synth({ enableIpv6: true });
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupEgress: Match.arrayWith([
+          Match.objectLike({ CidrIpv6: '::/0', IpProtocol: '-1' }),
+        ]),
+      });
+    });
+
+    test('enableIpv6 + associatePublicIp:false synths a private dual-stack instance (no public IPv4)', () => {
+      const t = synth({ enableIpv6: true, associatePublicIp: false });
+      t.hasResourceProperties('AWS::EC2::Instance', {
+        Ipv6AddressCount: 1,
+      });
+      // No NetworkInterfaces block requesting a public IPv4 association.
+      const instances = t.findResources('AWS::EC2::Instance');
+      const json = JSON.stringify(instances);
+      expect(json).not.toContain('"AssociatePublicIpAddress":true');
+    });
+
+    test('the no-prop golden (RC0.1) is unchanged: no IPv6 anywhere by default', () => {
+      const t = synth();
+      const all = JSON.stringify(t.toJSON());
+      expect(all).not.toContain('Ipv6AddressCount');
+      expect(all).not.toContain('::/0');
+    });
+  });
 });

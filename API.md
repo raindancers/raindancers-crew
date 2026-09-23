@@ -1251,6 +1251,7 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupSchedule">backupSchedule</a></code> | <code>string</code> | systemd OnCalendar expression for the backup timer (see `man systemd.time`). Only used when {@link backupBucket} is set. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.bootstrapTimeoutMinutes">bootstrapTimeoutMinutes</a></code> | <code>number</code> | Minutes to wait for the gateway to become healthy before the stack fails and rolls back (cold boot + dnf + Node + vite build + pip). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.dashboardPort">dashboardPort</a></code> | <code>number</code> | TCP port the gateway serves the dashboard on (loopback only; |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.enableIpv6">enableIpv6</a></code> | <code>boolean</code> | Assign an IPv6 address to the instance's primary ENI and permit IPv6 egress on the security group. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.instanceType">instanceType</a></code> | <code>aws-cdk-lib.aws_ec2.InstanceType</code> | EC2 instance type. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.source">source</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewSource">CrewSource</a></code> | How the KiroCrew source reaches the instance (S3 tarball or git clone). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.stackTag">stackTag</a></code> | <code>string</code> | Discovery tag value written as `kirocrew:instance`. |
@@ -1409,6 +1410,29 @@ TCP port the gateway serves the dashboard on (loopback only;
 
 reached via
 SSM port-forward). Recorded in the instance registry as the remote port.
+
+---
+
+##### `enableIpv6`<sup>Optional</sup> <a name="enableIpv6" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.enableIpv6"></a>
+
+```typescript
+public readonly enableIpv6: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false
+
+Assign an IPv6 address to the instance's primary ENI and permit IPv6 egress on the security group.
+
+Enables a dual-stack posture: combined with `associatePublicIp: false` and
+a private, IPv6-capable subnet, the instance egresses over IPv6 (via the
+VPC's Egress-Only Internet Gateway) with no public IPv4. CDK's
+`allowAllOutbound` renders IPv4 `0.0.0.0/0` egress only, so this also adds
+an explicit all-traffic IPv6 egress rule.
+
+This construct does NOT provision subnet IPv6 CIDRs, an Egress-Only
+Internet Gateway, or any route — those are the consumer VPC's
+responsibility. The selected subnet(s) MUST already carry IPv6 CIDRs.
 
 ---
 

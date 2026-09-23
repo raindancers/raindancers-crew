@@ -117,6 +117,24 @@ export interface RemoteCrewInstanceProps {
   readonly associatePublicIp?: boolean;
 
   /**
+   * Assign an IPv6 address to the instance's primary ENI and permit IPv6
+   * egress on the security group.
+   *
+   * Enables a dual-stack posture: combined with `associatePublicIp: false` and
+   * a private, IPv6-capable subnet, the instance egresses over IPv6 (via the
+   * VPC's Egress-Only Internet Gateway) with no public IPv4. CDK's
+   * `allowAllOutbound` renders IPv4 `0.0.0.0/0` egress only, so this also adds
+   * an explicit all-traffic IPv6 egress rule.
+   *
+   * This construct does NOT provision subnet IPv6 CIDRs, an Egress-Only
+   * Internet Gateway, or any route — those are the consumer VPC's
+   * responsibility. The selected subnet(s) MUST already carry IPv6 CIDRs.
+   *
+   * @default false
+   */
+  readonly enableIpv6?: boolean;
+
+  /**
    * Discovery tag value written as `kirocrew:instance`. Must match
    * `[a-zA-Z0-9-]{1,51}`.
    *

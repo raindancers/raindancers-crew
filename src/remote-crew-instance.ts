@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  Annotations,
   CfnOutput,
   CfnWaitCondition,
   CfnWaitConditionHandle,
@@ -104,6 +105,9 @@ export class RemoteCrewInstance extends Construct {
       vpc: props.vpc,
       description: `KiroCrew ${stackTag} - SSM-only (no inbound by default)`,
       allowAllOutbound: true,
+      // CDK's allowAllOutbound renders IPv4 0.0.0.0/0 egress only; a dual-stack
+      // instance needs IPv6 egress explicitly or its IPv6 traffic is dropped.
+      allowAllIpv6Outbound: props.enableIpv6 ?? false,
     });
     if (props.allowSshCidr) {
       this.securityGroup.addIngressRule(
@@ -234,6 +238,33 @@ export class RemoteCrewInstance extends Construct {
     });
     Tags.of(this.instance).add('Name', `kirocrew-${stackTag}`);
 
+    // --- IPv6 on the primary ENI (dual-stack). ec2.Instance exposes no IPv6
+    // prop, so set it on the underlying CfnInstance. The VPC owns the subnet
+    // IPv6 CIDR + Egress-Only IGW + routes (see enableIpv6 doc / RC5).
+    if (props.enableIpv6) {
+      const cfnInstance = this.instance.node.defaultChild as ec2.CfnInstance;
+      cfnInstance.ipv6AddressCount = 1;
+
+      // Best-effort synth-time note when the resolved subnets expose no IPv6
+      // CIDR. Subnet IPv6 state is only knowable for concrete (non-token)
+      // subnets; a token means a looked-up/imported VPC where we cannot see it,
+      // so we stay silent rather than warn spuriously.
+      const selected = props.vpc.selectSubnets(
+        props.vpcSubnets ?? { subnetType: ec2.SubnetType.PUBLIC },
+      );
+      const anyWithoutIpv6 = selected.subnets.some(
+        (s) => !Token.isUnresolved(s.ipv4CidrBlock) && !hasIpv6(s),
+      );
+      if (anyWithoutIpv6) {
+        Annotations.of(this).addWarning(
+          'enableIpv6 is set but at least one selected subnet exposes no IPv6 ' +
+          'CIDR. Ensure the VPC assigns IPv6 CIDRs to these subnets and has an ' +
+          'Egress-Only Internet Gateway route — this construct provisions none ' +
+          'of that (consumer VPC responsibility).',
+        );
+      }
+    }
+
     // Discovery tags on the instance and SG (matches the registry contract).
     for (const taggable of [this.instance, this.securityGroup]) {
       Tags.of(taggable).add('kirocrew:managed', 'true');
@@ -278,9 +309,22 @@ export class RemoteCrewInstance extends Construct {
   }
 }
 
+/**
+ * Whether a subnet carries an IPv6 CIDR association. CDK does not surface this
+ * on ISubnet, so read the underlying CfnSubnet's ipv6CidrBlock when available.
+ * Returns false when it cannot be determined (best-effort synth-time note).
+ */
+function hasIpv6(subnet: ec2.ISubnet): boolean {
+  const cfn = subnet.node.defaultChild as ec2.CfnSubnet | undefined;
+  if (!cfn) {
+    return false;
+  }
+  const block = cfn.ipv6CidrBlock;
+  return block !== undefined && block !== null && block !== '';
+}
+
 /** Single-quote a literal for safe embedding; pass CDK tokens through. */
-function shellQuote(value: string): string {
-  // An unresolved CDK token (e.g. the WaitHandle ref) must reach CloudFormation
+function shellQuote(value: string): string { // An unresolved CDK token (e.g. the WaitHandle ref) must reach CloudFormation
   // intact — UserData interpolation resolves it. Only literals are quoted.
   if (Token.isUnresolved(value)) {
     return value;
