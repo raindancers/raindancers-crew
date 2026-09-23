@@ -199,6 +199,26 @@ export interface RemoteCrewInstanceProps {
   readonly webhookIngress?: WebhookIngress;
 
   /**
+   * Secrets Manager ARN of the Bearer token that authenticates the native
+   * webhook (`POST /api/hooks/agent`). At boot the instance fetches the secret
+   * and writes it as `hooks.webhook_token` in the crew `config.json` — the
+   * token is never baked into userData, env literals, or code. The instance
+   * role is granted `secretsmanager:GetSecretValue` on THIS ARN only.
+   *
+   * Required when {@link webhookIngress} is set: a reachable webhook with no
+   * auth is a defect, not a default, so synth fails if ingress is opened
+   * without a token.
+   *
+   * NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only and exposes no
+   * routable webhook listener — see the webhook Decisions-for-review in the PR.
+   * This wires the AUTH (token-in-config); routable exposure of the loopback
+   * route is a consumer reverse-proxy / tunnel concern.
+   *
+   * @default - webhook auth not configured (loopback / SSM only)
+   */
+  readonly webhookTokenSecretArn?: string;
+
+  /**
    * How the KiroCrew source reaches the instance (S3 tarball or git clone).
    *
    * @default - clone kirodotdev/KiroCrew@main

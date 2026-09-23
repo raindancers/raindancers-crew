@@ -245,6 +245,9 @@ describe('RemoteCrewInstance', () => {
         vpc,
         permissionsBoundaryArn: BOUNDARY,
         webhookIngress: { source: sourceSg, ...(port ? { port } : {}) },
+        // A reachable webhook requires a token (RC3 guard).
+        webhookTokenSecretArn:
+          'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/wh-AbCdEf',
       });
       return Template.fromStack(stack);
     }
@@ -310,6 +313,88 @@ describe('RemoteCrewInstance', () => {
       });
       expect(crew.securityGroup).toBeDefined();
       expect(crew.securityGroup.securityGroupId).toBeDefined();
+    });
+  });
+
+  // --- RC3: native webhook wake + Bearer token (built to loopback reality).
+  describe('RC3 webhook token', () => {
+    const ARN =
+      'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/webhook-token-AbCdEf';
+
+    test('grants GetSecretValue on the one token ARN only', () => {
+      const t = synth({ webhookTokenSecretArn: ARN });
+      t.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+              Resource: ARN,
+            }),
+          ]),
+        }),
+      });
+    });
+
+    test('synth-fails when webhookIngress is set without a token', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const sg = new ec2.SecurityGroup(stack, 'IngestSg', { vpc });
+      expect(
+        () =>
+          new RemoteCrewInstance(stack, 'Crew', {
+            vpc,
+            permissionsBoundaryArn: BOUNDARY,
+            webhookIngress: { source: sg },
+          }),
+      ).toThrow(/webhookIngress requires webhookTokenSecretArn/);
+    });
+
+    test('userData carries the secret ARN substitution (token itself never baked)', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        webhookTokenSecretArn: ARN,
+      });
+      const json = JSON.stringify(stack.resolve(crew.instance.userData.render()));
+      expect(json).toContain('WEBHOOK_TOKEN_SECRET_ARN=');
+      expect(json).toContain(ARN);
+    });
+
+    test('no secret grant and empty ARN substitution on the default path (golden)', () => {
+      const t = synth();
+      const policies = JSON.stringify(t.findResources('AWS::IAM::Policy'));
+      expect(policies).not.toContain('secretsmanager:GetSecretValue');
+    });
+
+    test('bootstrap.sh ships the guarded token-fetch block (renders only when set)', () => {
+      // The construct reads bootstrap.sh at synth; assert the asset carries the
+      // guarded block so the token path exists, and that it is guarded on a
+      // non-empty WEBHOOK_TOKEN_SECRET_ARN so the no-prop render is unchanged.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path');
+      const asset = path.join(
+        __dirname,
+        '..',
+        'src',
+        'assets',
+        'bootstrap.sh',
+      );
+      const body = fs.readFileSync(asset, 'utf8');
+      expect(body).toContain('if [ -n "${WEBHOOK_TOKEN_SECRET_ARN:-}" ]; then');
+      expect(body).toContain('hooks.webhook_token');
+      expect(body).toContain('get-secret-value');
+      // The token literal is never written on argv — passed via env only.
+      expect(body).toContain('WEBHOOK_TOKEN="$WEBHOOK_TOKEN"');
     });
   });
 });

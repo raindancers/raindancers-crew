@@ -11,6 +11,7 @@ import {
 } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import {
   CrewArchitecture,
@@ -66,6 +67,12 @@ export class RemoteCrewInstance extends Construct {
     if (props.allowSshCidr && !CIDR_RE.test(props.allowSshCidr)) {
       throw new Error(
         `allowSshCidr must be a CIDR no wider than /16 (got '${props.allowSshCidr}')`,
+      );
+    }
+    if (props.webhookIngress && !props.webhookTokenSecretArn) {
+      throw new Error(
+        'webhookIngress requires webhookTokenSecretArn: a reachable webhook ' +
+        'with no Bearer token is a defect, not a default.',
       );
     }
 
@@ -145,8 +152,21 @@ export class RemoteCrewInstance extends Construct {
       'SOURCE_KEY=' + shellQuote(source.sourceKey ?? ''),
       'KIROCREW_REPO=' + shellQuote(source.kirocrewRepo ?? DEFAULT_REPO),
       'KIROCREW_REF=' + shellQuote(source.kirocrewRef ?? DEFAULT_REF),
-      'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF',
+      'WEBHOOK_TOKEN_SECRET_ARN=' + shellQuote(props.webhookTokenSecretArn ?? ''),
+      'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF WEBHOOK_TOKEN_SECRET_ARN',
     );
+
+    // --- Webhook Bearer token: grant GetSecretValue on the one ARN only; the
+    // token is fetched at boot and written into config.json (RC3). Loopback-
+    // only bind is unchanged — routable exposure is a consumer concern.
+    if (props.webhookTokenSecretArn) {
+      const webhookSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'WebhookToken',
+        props.webhookTokenSecretArn,
+      );
+      webhookSecret.grantRead(this.role);
+    }
 
     // --- Off-box backup wiring (only when a backup bucket is configured).
     if (props.backupBucket) {

@@ -1258,6 +1258,7 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.volumeSizeGb">volumeSizeGb</a></code> | <code>number</code> | gp3 root volume size in GiB (20–1000). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.vpcSubnets">vpcSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnet selection for the instance. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookIngress">webhookIngress</a></code> | <code><a href="#@raindancers/raindancers-crew.WebhookIngress">WebhookIngress</a></code> | Open the gateway/webhook port to ONE source security group only (never a CIDR). |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookTokenSecretArn">webhookTokenSecretArn</a></code> | <code>string</code> | Secrets Manager ARN of the Bearer token that authenticates the native webhook (`POST /api/hooks/agent`). |
 
 ---
 
@@ -1524,6 +1525,33 @@ Open the gateway/webhook port to ONE source security group only (never a CIDR).
 
 Independent of {@link allowSshCidr} — both, either, or neither may
 be set; unset leaves the SG no-inbound (the default).
+
+---
+
+##### `webhookTokenSecretArn`<sup>Optional</sup> <a name="webhookTokenSecretArn" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookTokenSecretArn"></a>
+
+```typescript
+public readonly webhookTokenSecretArn: string;
+```
+
+- *Type:* string
+- *Default:* webhook auth not configured (loopback / SSM only)
+
+Secrets Manager ARN of the Bearer token that authenticates the native webhook (`POST /api/hooks/agent`).
+
+At boot the instance fetches the secret
+and writes it as `hooks.webhook_token` in the crew `config.json` — the
+token is never baked into userData, env literals, or code. The instance
+role is granted `secretsmanager:GetSecretValue` on THIS ARN only.
+
+Required when {@link webhookIngress} is set: a reachable webhook with no
+auth is a defect, not a default, so synth fails if ingress is opened
+without a token.
+
+NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only and exposes no
+routable webhook listener — see the webhook Decisions-for-review in the PR.
+This wires the AUTH (token-in-config); routable exposure of the loopback
+route is a consumer reverse-proxy / tunnel concern.
 
 ---
 
