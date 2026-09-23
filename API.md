@@ -939,6 +939,64 @@ instance, so the backup must outlive a stack teardown too.
 
 ---
 
+### CrewRuntime <a name="CrewRuntime" id="@raindancers/raindancers-crew.CrewRuntime"></a>
+
+Always-on runtime settings for the hosted crew, threaded into the crew `config.json` at boot. All fields are optional and default to the current gateway behaviour; omitting {@link RemoteCrewInstanceProps.crewRuntime} entirely reproduces today's `kirocrew setup --agent-only` + `kirocrew gateway` exactly.
+
+Verified against KiroCrew v0.6.0: autopilot maps to `agent.approval_mode`,
+idle-close maps to `session.timeout_secs`, and the conductor roster ships
+with `setup --agent-only` (custom members are source-delivered JSON under
+`~/.kiro/agents/`).
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewRuntime.Initializer"></a>
+
+```typescript
+import { CrewRuntime } from '@raindancers/raindancers-crew'
+
+const crewRuntime: CrewRuntime = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRuntime.property.autopilot">autopilot</a></code> | <code>boolean</code> | Enable Autopilot: the hosted crew auto-approves tool calls that pass its security checks (deny rules and sensitive-path blocks still apply). |
+| <code><a href="#@raindancers/raindancers-crew.CrewRuntime.property.disableIdleClose">disableIdleClose</a></code> | <code>boolean</code> | Keep the 24/7 brain session alive between events by disabling the idle session sweep. |
+
+---
+
+##### `autopilot`<sup>Optional</sup> <a name="autopilot" id="@raindancers/raindancers-crew.CrewRuntime.property.autopilot"></a>
+
+```typescript
+public readonly autopilot: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false (interactive; gateway default)
+
+Enable Autopilot: the hosted crew auto-approves tool calls that pass its security checks (deny rules and sensitive-path blocks still apply).
+
+Sets
+`agent.approval_mode` to `"auto"` in config.json.
+
+---
+
+##### `disableIdleClose`<sup>Optional</sup> <a name="disableIdleClose" id="@raindancers/raindancers-crew.CrewRuntime.property.disableIdleClose"></a>
+
+```typescript
+public readonly disableIdleClose: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false (default 3600s idle timeout applies)
+
+Keep the 24/7 brain session alive between events by disabling the idle session sweep.
+
+Sets `session.timeout_secs` to `0` (documented: "0 disables
+the idle sweep").
+
+---
+
 ### CrewSource <a name="CrewSource" id="@raindancers/raindancers-crew.CrewSource"></a>
 
 How the KiroCrew source is delivered to the instance at first boot.
@@ -1250,12 +1308,16 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupPrefix">backupPrefix</a></code> | <code>string</code> | S3 key prefix under which snapshots are stored in the backup bucket. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.backupSchedule">backupSchedule</a></code> | <code>string</code> | systemd OnCalendar expression for the backup timer (see `man systemd.time`). Only used when {@link backupBucket} is set. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.bootstrapTimeoutMinutes">bootstrapTimeoutMinutes</a></code> | <code>number</code> | Minutes to wait for the gateway to become healthy before the stack fails and rolls back (cold boot + dnf + Node + vite build + pip). |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.crewRuntime">crewRuntime</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewRuntime">CrewRuntime</a></code> | Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew, threaded into config.json at boot. Omit for the current gateway defaults. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.dashboardPort">dashboardPort</a></code> | <code>number</code> | TCP port the gateway serves the dashboard on (loopback only; |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.enableIpv6">enableIpv6</a></code> | <code>boolean</code> | Assign an IPv6 address to the instance's primary ENI and permit IPv6 egress on the security group. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.instanceType">instanceType</a></code> | <code>aws-cdk-lib.aws_ec2.InstanceType</code> | EC2 instance type. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.source">source</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewSource">CrewSource</a></code> | How the KiroCrew source reaches the instance (S3 tarball or git clone). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.stackTag">stackTag</a></code> | <code>string</code> | Discovery tag value written as `kirocrew:instance`. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.volumeSizeGb">volumeSizeGb</a></code> | <code>number</code> | gp3 root volume size in GiB (20–1000). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.vpcSubnets">vpcSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnet selection for the instance. |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookIngress">webhookIngress</a></code> | <code><a href="#@raindancers/raindancers-crew.WebhookIngress">WebhookIngress</a></code> | Open the gateway/webhook port to ONE source security group only (never a CIDR). |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookTokenSecretArn">webhookTokenSecretArn</a></code> | <code>string</code> | Secrets Manager ARN of the Bearer token that authenticates the native webhook (`POST /api/hooks/agent`). |
 
 ---
 
@@ -1396,6 +1458,19 @@ Minutes to wait for the gateway to become healthy before the stack fails and rol
 
 ---
 
+##### `crewRuntime`<sup>Optional</sup> <a name="crewRuntime" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.crewRuntime"></a>
+
+```typescript
+public readonly crewRuntime: CrewRuntime;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewRuntime">CrewRuntime</a>
+- *Default:* current gateway behaviour (interactive, 3600s idle timeout)
+
+Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew, threaded into config.json at boot. Omit for the current gateway defaults.
+
+---
+
 ##### `dashboardPort`<sup>Optional</sup> <a name="dashboardPort" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.dashboardPort"></a>
 
 ```typescript
@@ -1409,6 +1484,29 @@ TCP port the gateway serves the dashboard on (loopback only;
 
 reached via
 SSM port-forward). Recorded in the instance registry as the remote port.
+
+---
+
+##### `enableIpv6`<sup>Optional</sup> <a name="enableIpv6" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.enableIpv6"></a>
+
+```typescript
+public readonly enableIpv6: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false
+
+Assign an IPv6 address to the instance's primary ENI and permit IPv6 egress on the security group.
+
+Enables a dual-stack posture: combined with `associatePublicIp: false` and
+a private, IPv6-capable subnet, the instance egresses over IPv6 (via the
+VPC's Egress-Only Internet Gateway) with no public IPv4. CDK's
+`allowAllOutbound` renders IPv4 `0.0.0.0/0` egress only, so this also adds
+an explicit all-traffic IPv6 egress rule.
+
+This construct does NOT provision subnet IPv6 CIDRs, an Egress-Only
+Internet Gateway, or any route — those are the consumer VPC's
+responsibility. The selected subnet(s) MUST already carry IPv6 CIDRs.
 
 ---
 
@@ -1483,6 +1581,113 @@ Subnet selection for the instance.
 A public (IGW-routed) subnet needs a
 public IP for egress; a private (NAT-routed) subnet does not — see
 {@link associatePublicIp}.
+
+---
+
+##### `webhookIngress`<sup>Optional</sup> <a name="webhookIngress" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookIngress"></a>
+
+```typescript
+public readonly webhookIngress: WebhookIngress;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.WebhookIngress">WebhookIngress</a>
+- *Default:* no webhook ingress
+
+Open the gateway/webhook port to ONE source security group only (never a CIDR).
+
+Independent of {@link allowSshCidr} — both, either, or neither may
+be set; unset leaves the SG no-inbound (the default).
+
+---
+
+##### `webhookTokenSecretArn`<sup>Optional</sup> <a name="webhookTokenSecretArn" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookTokenSecretArn"></a>
+
+```typescript
+public readonly webhookTokenSecretArn: string;
+```
+
+- *Type:* string
+- *Default:* webhook auth not configured (loopback / SSM only)
+
+Secrets Manager ARN of the Bearer token that authenticates the native webhook (`POST /api/hooks/agent`).
+
+At boot the instance fetches the secret
+and writes it as `hooks.webhook_token` in the crew `config.json` — the
+token is never baked into userData, env literals, or code. The instance
+role is granted `secretsmanager:GetSecretValue` on THIS ARN only.
+
+Required when {@link webhookIngress} is set: a reachable webhook with no
+auth is a defect, not a default, so synth fails if ingress is opened
+without a token.
+
+NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only and exposes no
+routable webhook listener — see the webhook Decisions-for-review in the PR.
+This wires the AUTH (token-in-config); routable exposure of the loopback
+route is a consumer reverse-proxy / tunnel concern.
+
+---
+
+### WebhookIngress <a name="WebhookIngress" id="@raindancers/raindancers-crew.WebhookIngress"></a>
+
+Exposes the gateway's webhook port to ONE source security group.
+
+There is deliberately no CIDR form: the brain box is never internet-
+reachable by contract. The named source SG (e.g. an ingest Lambda's SG, or a
+reverse proxy that fronts the loopback gateway) is the only peer allowed to
+reach the port.
+
+NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only — it exposes no
+routable listener. This rule opens the security group so a consumer-owned
+reverse proxy / tunnel on the box can be reached from the source SG; actually
+serving the webhook on a routable interface is the consumer's concern (see
+README "Private dual-stack brain" and the webhook Decisions-for-review).
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.WebhookIngress.Initializer"></a>
+
+```typescript
+import { WebhookIngress } from '@raindancers/raindancers-crew'
+
+const webhookIngress: WebhookIngress = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.WebhookIngress.property.source">source</a></code> | <code>aws-cdk-lib.aws_ec2.ISecurityGroup</code> | Imported security group allowed to reach the webhook port. |
+| <code><a href="#@raindancers/raindancers-crew.WebhookIngress.property.port">port</a></code> | <code>number</code> | TCP port the ingress rule opens. |
+
+---
+
+##### `source`<sup>Required</sup> <a name="source" id="@raindancers/raindancers-crew.WebhookIngress.property.source"></a>
+
+```typescript
+public readonly source: ISecurityGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.ISecurityGroup
+
+Imported security group allowed to reach the webhook port.
+
+Passed as an
+`ISecurityGroup` (imported) — this construct never creates it.
+
+---
+
+##### `port`<sup>Optional</sup> <a name="port" id="@raindancers/raindancers-crew.WebhookIngress.property.port"></a>
+
+```typescript
+public readonly port: number;
+```
+
+- *Type:* number
+- *Default:* the resolved dashboardPort (5476)
+
+TCP port the ingress rule opens.
+
+Defaults to the dashboard/gateway port so
+a reverse proxy fronting the loopback gateway is reachable; override to
+target a consumer proxy on a different port.
 
 ---
 

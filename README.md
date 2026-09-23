@@ -124,7 +124,7 @@ The sections below are the per-construct reference.
 | Resource | Notes |
 |---|---|
 | IAM role + instance profile | `AmazonSSMManagedInstanceCore` + a **required permissions boundary**; scoped `s3:GetObject` only when an S3 source is used |
-| Security group | **No inbound** by default (SSM-only); optional `tcp/22` from `allowSshCidr` (≤ /16) |
+| Security group | **No inbound** by default (SSM-only); optional `tcp/22` from `allowSshCidr` (≤ /16); optional webhook port from a single source SG via `webhookIngress`; IPv6 egress when `enableIpv6` |
 | EC2 instance | Amazon Linux 2023, arch-aware AMI, **IMDSv2 enforced**, **encrypted gp3** root |
 | WaitConditionHandle + WaitCondition | Blocks stack completion until the gateway is actually serving on the loopback dashboard port |
 
@@ -135,6 +135,62 @@ The sections below are the per-construct reference.
 - **Permissions boundary is mandatory** on the instance role.
 - **Node.js tarball is SHA-256-pinned** and verified before root extraction.
 - **Encrypted EBS root.**
+
+## Private dual-stack brain (55minutes posture)
+
+For an always-on brain that egresses over IPv6 with **no public IPv4**, is woken
+by the native KiroCrew webhook, and runs as an autopilot crew that never
+idle-closes, compose the additive props below. Everything here is optional and
+defaults off — omit it all and you get the SSM-only public-subnet box above.
+
+```ts
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { RemoteCrewInstance, CrewArchitecture } from '@raindancers/raindancers-crew';
+
+// vpc: a dual-stack VPC whose private subnets carry IPv6 CIDRs and route
+//      ::/0 to an Egress-Only Internet Gateway (see "What stays yours" below).
+// ingestLambdaSg: the SG of the consumer's ingest Lambda / reverse proxy —
+//      imported, this construct never creates it.
+new RemoteCrewInstance(this, 'Brain', {
+  vpc,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+  architecture: CrewArchitecture.ARM64,
+  source: { kirocrewRef: 'v0.8.0' },
+
+  // Private + dual-stack: IPv6 egress, no public IPv4.
+  vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+  associatePublicIp: false,
+  enableIpv6: true,
+
+  // Webhook reach from ONE source SG only (never a CIDR), authenticated by a
+  // Bearer token fetched from Secrets Manager at boot (written to config.json
+  // as hooks.webhook_token; the instance role gets GetSecretValue on this ARN).
+  webhookIngress: { source: ingestLambdaSg },
+  webhookTokenSecretArn:
+    'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/webhook-token-AbCdEf',
+
+  // Always-on: autopilot + never idle-close.
+  crewRuntime: { autopilot: true, disableIdleClose: true },
+});
+```
+
+### What stays yours (this construct provisions none of it)
+
+`RemoteCrewInstance` consumes an `IVpc` and provisions no routing, so these live
+in your VPC / app, not the library:
+
+- **Egress-Only Internet Gateway** and the `::/0` IPv6 egress route — the VPC's
+  concern. `enableIpv6` assigns the instance an IPv6 address and opens IPv6
+  egress on its SG, but the route to the internet is yours.
+- **fck-nat (or managed NAT)** for any IPv4 egress you still need.
+- **The ingest Lambda and its security group** — you build it and pass its SG as
+  `webhookIngress.source`. The construct only accepts it.
+- **Routable exposure of the webhook.** The KiroCrew gateway binds `127.0.0.1`
+  only (it has no routable listener), so `webhookIngress` opens the SG but a
+  **consumer-owned reverse proxy or SSH tunnel on the box** is what actually
+  forwards `POST /api/hooks/agent` from the source SG to the loopback gateway.
+  The dashboard stays loopback/SSM-only regardless.
 
 ## Connecting
 

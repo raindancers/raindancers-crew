@@ -171,4 +171,284 @@ describe('RemoteCrewInstance', () => {
     expect(json).toContain('v0.8.0');
     expect(json).toContain('KiroCrew bootstrap');
   });
+
+  // --- RC0: backward-compatibility golden. The no-prop synth must be
+  // unchanged by every later group. Snapshot the SG + instance shape and the
+  // rendered bootstrap.sh bytes as the lock.
+  describe('RC0 backward-compatibility golden (no-prop)', () => {
+    test('no-prop SG has no inbound and no IPv6 egress rule', () => {
+      const t = synth();
+      // No inbound at all.
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.absent(),
+      });
+      // Egress is the single CDK allowAllOutbound IPv4 rule; no ::/0 egress.
+      const sgs = t.findResources('AWS::EC2::SecurityGroup');
+      const json = JSON.stringify(sgs);
+      expect(json).not.toContain('::/0');
+    });
+
+    test('no-prop instance has no IPv6 address count', () => {
+      const t = synth();
+      const instances = t.findResources('AWS::EC2::Instance');
+      const json = JSON.stringify(instances);
+      expect(json).not.toContain('Ipv6AddressCount');
+    });
+  });
+
+  // --- RC1: dual-stack IPv6 ENI.
+  describe('RC1 dual-stack IPv6', () => {
+    test('enableIpv6 adds an IPv6 address to the primary ENI', () => {
+      synth({ enableIpv6: true }).hasResourceProperties('AWS::EC2::Instance', {
+        Ipv6AddressCount: 1,
+      });
+    });
+
+    test('enableIpv6 adds an all-traffic IPv6 egress rule', () => {
+      const t = synth({ enableIpv6: true });
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupEgress: Match.arrayWith([
+          Match.objectLike({ CidrIpv6: '::/0', IpProtocol: '-1' }),
+        ]),
+      });
+    });
+
+    test('enableIpv6 + associatePublicIp:false synths a private dual-stack instance (no public IPv4)', () => {
+      const t = synth({ enableIpv6: true, associatePublicIp: false });
+      t.hasResourceProperties('AWS::EC2::Instance', {
+        Ipv6AddressCount: 1,
+      });
+      // No NetworkInterfaces block requesting a public IPv4 association.
+      const instances = t.findResources('AWS::EC2::Instance');
+      const json = JSON.stringify(instances);
+      expect(json).not.toContain('"AssociatePublicIpAddress":true');
+    });
+
+    test('the no-prop golden (RC0.1) is unchanged: no IPv6 anywhere by default', () => {
+      const t = synth();
+      const all = JSON.stringify(t.toJSON());
+      expect(all).not.toContain('Ipv6AddressCount');
+      expect(all).not.toContain('::/0');
+    });
+  });
+
+  // --- RC2: source-SG webhook ingress.
+  describe('RC2 source-SG webhook ingress', () => {
+    function synthWithSourceSg(port?: number) {
+      const app = new App();
+      const stack = new Stack(app, 'TestStack', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const sourceSg = new ec2.SecurityGroup(stack, 'IngestSg', { vpc });
+      new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        webhookIngress: { source: sourceSg, ...(port ? { port } : {}) },
+        // A reachable webhook requires a token (RC3 guard).
+        webhookTokenSecretArn:
+          'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/wh-AbCdEf',
+      });
+      return Template.fromStack(stack);
+    }
+
+    test('adds a single ingress rule peered to the source SG on the default port (5476)', () => {
+      const t = synthWithSourceSg();
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            FromPort: 5476,
+            ToPort: 5476,
+            IpProtocol: 'tcp',
+            SourceSecurityGroupId: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('honours an explicit webhook port override', () => {
+      const t = synthWithSourceSg(8443);
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            FromPort: 8443,
+            ToPort: 8443,
+            SourceSecurityGroupId: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('never opens the webhook to a CIDR peer (no CIDR on any ingress rule)', () => {
+      const t = synthWithSourceSg();
+      const sgs = t.findResources('AWS::EC2::SecurityGroup');
+      // Inspect ONLY ingress rules — the default allowAllOutbound egress
+      // legitimately renders 0.0.0.0/0, so scanning the whole SG would false-positive.
+      const ingressRules = Object.values(sgs).flatMap(
+        (s: any) => s.Properties.SecurityGroupIngress ?? [],
+      );
+      const json = JSON.stringify(ingressRules);
+      expect(json).not.toContain('CidrIp');
+      expect(json).not.toContain('0.0.0.0/0');
+      expect(json).not.toContain('::/0');
+      // And exactly one ingress rule exists (the source-SG webhook rule).
+      expect(ingressRules).toHaveLength(1);
+    });
+
+    test('omitting webhookIngress leaves the SG no-inbound (golden unchanged)', () => {
+      synth().hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.absent(),
+      });
+    });
+
+    test('exposes the security group for consumer reference', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+      });
+      expect(crew.securityGroup).toBeDefined();
+      expect(crew.securityGroup.securityGroupId).toBeDefined();
+    });
+  });
+
+  // --- RC3: native webhook wake + Bearer token (built to loopback reality).
+  describe('RC3 webhook token', () => {
+    const ARN =
+      'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/webhook-token-AbCdEf';
+
+    test('grants GetSecretValue on the one token ARN only', () => {
+      const t = synth({ webhookTokenSecretArn: ARN });
+      t.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+              Resource: ARN,
+            }),
+          ]),
+        }),
+      });
+    });
+
+    test('synth-fails when webhookIngress is set without a token', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const sg = new ec2.SecurityGroup(stack, 'IngestSg', { vpc });
+      expect(
+        () =>
+          new RemoteCrewInstance(stack, 'Crew', {
+            vpc,
+            permissionsBoundaryArn: BOUNDARY,
+            webhookIngress: { source: sg },
+          }),
+      ).toThrow(/webhookIngress requires webhookTokenSecretArn/);
+    });
+
+    test('userData carries the secret ARN substitution (token itself never baked)', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        webhookTokenSecretArn: ARN,
+      });
+      const json = JSON.stringify(stack.resolve(crew.instance.userData.render()));
+      expect(json).toContain('WEBHOOK_TOKEN_SECRET_ARN=');
+      expect(json).toContain(ARN);
+    });
+
+    test('no secret grant and empty ARN substitution on the default path (golden)', () => {
+      const t = synth();
+      const policies = JSON.stringify(t.findResources('AWS::IAM::Policy'));
+      expect(policies).not.toContain('secretsmanager:GetSecretValue');
+    });
+
+    test('bootstrap.sh ships the guarded token-fetch block (renders only when set)', () => {
+      // The construct reads bootstrap.sh at synth; assert the asset carries the
+      // guarded block so the token path exists, and that it is guarded on a
+      // non-empty WEBHOOK_TOKEN_SECRET_ARN so the no-prop render is unchanged.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path');
+      const asset = path.join(
+        __dirname,
+        '..',
+        'src',
+        'assets',
+        'bootstrap.sh',
+      );
+      const body = fs.readFileSync(asset, 'utf8');
+      expect(body).toContain('if [ -n "${WEBHOOK_TOKEN_SECRET_ARN:-}" ]; then');
+      expect(body).toContain('hooks.webhook_token');
+      expect(body).toContain('get-secret-value');
+      // The token literal is never written on argv — passed via env only.
+      expect(body).toContain('WEBHOOK_TOKEN="$WEBHOOK_TOKEN"');
+    });
+  });
+
+  // --- RC4: always-on crew runtime (autopilot / no-idle-close).
+  describe('RC4 crew runtime', () => {
+    function renderUserData(overrides?: Record<string, unknown>) {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        ...(overrides as object),
+      });
+      return JSON.stringify(stack.resolve(crew.instance.userData.render()));
+    }
+
+    test('autopilot sets the CREW_AUTOPILOT substitution', () => {
+      const json = renderUserData({ crewRuntime: { autopilot: true } });
+      expect(json).toContain("CREW_AUTOPILOT='1'");
+    });
+
+    test('disableIdleClose sets the CREW_DISABLE_IDLE_CLOSE substitution', () => {
+      const json = renderUserData({ crewRuntime: { disableIdleClose: true } });
+      expect(json).toContain("CREW_DISABLE_IDLE_CLOSE='1'");
+    });
+
+    test('no crewRuntime leaves both flags empty (golden default)', () => {
+      const json = renderUserData();
+      expect(json).toContain("CREW_AUTOPILOT=''");
+      expect(json).toContain("CREW_DISABLE_IDLE_CLOSE=''");
+    });
+
+    test('bootstrap.sh maps the flags to the verified config keys', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path');
+      const body = fs.readFileSync(
+        path.join(__dirname, '..', 'src', 'assets', 'bootstrap.sh'),
+        'utf8',
+      );
+      // Guarded on the flags so the no-prop render is unchanged.
+      expect(body).toContain(
+        'if [ -n "${CREW_AUTOPILOT:-}" ] || [ -n "${CREW_DISABLE_IDLE_CLOSE:-}" ]; then',
+      );
+      // Verified v0.6.0 config keys.
+      expect(body).toContain('agent');
+      expect(body).toContain('approval_mode');
+      expect(body).toContain('"auto"');
+      expect(body).toContain('session');
+      expect(body).toContain('timeout_secs');
+    });
+  });
 });

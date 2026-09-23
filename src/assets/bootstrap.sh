@@ -14,6 +14,14 @@
 #   SOURCE_KEY      S3 source key
 #   KIROCREW_REPO   git repo to clone
 #   KIROCREW_REF    git ref to install
+#   WEBHOOK_TOKEN_SECRET_ARN  (optional) Secrets Manager ARN of the native-
+#                   webhook Bearer token; when non-empty it is fetched at boot
+#                   and written to config.json as hooks.webhook_token. Empty =>
+#                   webhook auth unconfigured (loopback/SSM only), unchanged.
+#   CREW_AUTOPILOT  (optional) "1" => set agent.approval_mode="auto" in
+#                   config.json. Empty => gateway default (interactive).
+#   CREW_DISABLE_IDLE_CLOSE  (optional) "1" => set session.timeout_secs=0
+#                   (disables the idle session sweep). Empty => default 3600s.
 #
 # Security-load-bearing choices preserved from upstream: IMDSv2 is enforced at
 # the instance (construct side), the Node tarball SHA-256 is verified before
@@ -194,6 +202,92 @@ KCFETCH
     export PATH=\$HOME/.local/bin:\$PATH
     kirocrew setup --agent-only || true
   " || true
+
+  # --- Native-webhook Bearer token (RC3, guarded). When a Secrets Manager ARN
+  # was passed, fetch the token and write it into the crew config.json as
+  # hooks.webhook_token so POST /api/hooks/agent authenticates. The token is
+  # fetched at boot, never baked into userData/code. The gateway still binds
+  # loopback only; routable exposure is a consumer reverse-proxy/tunnel concern.
+  if [ -n "${WEBHOOK_TOKEN_SECRET_ARN:-}" ]; then
+    echo "--- configuring native-webhook token from Secrets Manager ---"
+    WEBHOOK_TOKEN=$(aws secretsmanager get-secret-value \
+      --secret-id "$WEBHOOK_TOKEN_SECRET_ARN" \
+      --query SecretString --output text 2>/dev/null) \
+      || fail "could not fetch the webhook token secret ($WEBHOOK_TOKEN_SECRET_ARN)"
+    if [ -z "$WEBHOOK_TOKEN" ]; then
+      fail "webhook token secret resolved empty ($WEBHOOK_TOKEN_SECRET_ARN)"
+    fi
+    CONFIG_DIR="$RUN_HOME/.kiro/crew"
+    CONFIG_JSON="$CONFIG_DIR/config.json"
+    sudo -u $RUN_USER mkdir -p "$CONFIG_DIR"
+    # Merge hooks.webhook_token into config.json without clobbering other keys.
+    # python3 is installed above; write the token via env, never on argv.
+    WEBHOOK_TOKEN="$WEBHOOK_TOKEN" CONFIG_JSON="$CONFIG_JSON" \
+      sudo -u $RUN_USER -E python3 - <<'PYEOF' \
+      || fail "could not write hooks.webhook_token into config.json"
+import json, os
+path = os.environ["CONFIG_JSON"]
+token = os.environ["WEBHOOK_TOKEN"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+    if not isinstance(cfg, dict):
+        cfg = {}
+except (FileNotFoundError, ValueError):
+    cfg = {}
+hooks = cfg.get("hooks")
+if not isinstance(hooks, dict):
+    hooks = {}
+hooks["webhook_token"] = token
+cfg["hooks"] = hooks
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
+    chown "$RUN_USER":"$RUN_USER" "$CONFIG_JSON" 2>/dev/null || true
+    chmod 600 "$CONFIG_JSON" 2>/dev/null || true
+    unset WEBHOOK_TOKEN
+    echo "webhook token written to config.json (hooks.webhook_token)"
+  fi
+
+  # --- Always-on crew runtime (RC4, guarded). Merge autopilot / no-idle-close
+  # into config.json. Empty flags => keys untouched => current gateway defaults.
+  if [ -n "${CREW_AUTOPILOT:-}" ] || [ -n "${CREW_DISABLE_IDLE_CLOSE:-}" ]; then
+    echo "--- configuring always-on crew runtime (autopilot/idle-close) ---"
+    CONFIG_DIR="$RUN_HOME/.kiro/crew"
+    CONFIG_JSON="$CONFIG_DIR/config.json"
+    sudo -u $RUN_USER mkdir -p "$CONFIG_DIR"
+    CREW_AUTOPILOT="${CREW_AUTOPILOT:-}" \
+    CREW_DISABLE_IDLE_CLOSE="${CREW_DISABLE_IDLE_CLOSE:-}" \
+    CONFIG_JSON="$CONFIG_JSON" \
+      sudo -u $RUN_USER -E python3 - <<'PYEOF' \
+      || fail "could not write crew runtime settings into config.json"
+import json, os
+path = os.environ["CONFIG_JSON"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+    if not isinstance(cfg, dict):
+        cfg = {}
+except (FileNotFoundError, ValueError):
+    cfg = {}
+if os.environ.get("CREW_AUTOPILOT"):
+    agent = cfg.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
+    agent["approval_mode"] = "auto"
+    cfg["agent"] = agent
+if os.environ.get("CREW_DISABLE_IDLE_CLOSE"):
+    session = cfg.get("session")
+    if not isinstance(session, dict):
+        session = {}
+    session["timeout_secs"] = 0
+    cfg["session"] = session
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
+    chown "$RUN_USER":"$RUN_USER" "$CONFIG_JSON" 2>/dev/null || true
+    echo "crew runtime settings written to config.json"
+  fi
 
   KIROCREW_BIN=$(sudo -u $RUN_USER bash -lc 'command -v kirocrew || echo $HOME/.local/bin/kirocrew')
   cat > /etc/systemd/system/kirocrew.service <<UNIT
