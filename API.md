@@ -1257,6 +1257,7 @@ const remoteCrewInstanceProps: RemoteCrewInstanceProps = { ... }
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.stackTag">stackTag</a></code> | <code>string</code> | Discovery tag value written as `kirocrew:instance`. |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.volumeSizeGb">volumeSizeGb</a></code> | <code>number</code> | gp3 root volume size in GiB (20–1000). |
 | <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.vpcSubnets">vpcSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnet selection for the instance. |
+| <code><a href="#@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookIngress">webhookIngress</a></code> | <code><a href="#@raindancers/raindancers-crew.WebhookIngress">WebhookIngress</a></code> | Open the gateway/webhook port to ONE source security group only (never a CIDR). |
 
 ---
 
@@ -1507,6 +1508,86 @@ Subnet selection for the instance.
 A public (IGW-routed) subnet needs a
 public IP for egress; a private (NAT-routed) subnet does not — see
 {@link associatePublicIp}.
+
+---
+
+##### `webhookIngress`<sup>Optional</sup> <a name="webhookIngress" id="@raindancers/raindancers-crew.RemoteCrewInstanceProps.property.webhookIngress"></a>
+
+```typescript
+public readonly webhookIngress: WebhookIngress;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.WebhookIngress">WebhookIngress</a>
+- *Default:* no webhook ingress
+
+Open the gateway/webhook port to ONE source security group only (never a CIDR).
+
+Independent of {@link allowSshCidr} — both, either, or neither may
+be set; unset leaves the SG no-inbound (the default).
+
+---
+
+### WebhookIngress <a name="WebhookIngress" id="@raindancers/raindancers-crew.WebhookIngress"></a>
+
+Exposes the gateway's webhook port to ONE source security group.
+
+There is deliberately no CIDR form: the brain box is never internet-
+reachable by contract. The named source SG (e.g. an ingest Lambda's SG, or a
+reverse proxy that fronts the loopback gateway) is the only peer allowed to
+reach the port.
+
+NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only — it exposes no
+routable listener. This rule opens the security group so a consumer-owned
+reverse proxy / tunnel on the box can be reached from the source SG; actually
+serving the webhook on a routable interface is the consumer's concern (see
+README "Private dual-stack brain" and the webhook Decisions-for-review).
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.WebhookIngress.Initializer"></a>
+
+```typescript
+import { WebhookIngress } from '@raindancers/raindancers-crew'
+
+const webhookIngress: WebhookIngress = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.WebhookIngress.property.source">source</a></code> | <code>aws-cdk-lib.aws_ec2.ISecurityGroup</code> | Imported security group allowed to reach the webhook port. |
+| <code><a href="#@raindancers/raindancers-crew.WebhookIngress.property.port">port</a></code> | <code>number</code> | TCP port the ingress rule opens. |
+
+---
+
+##### `source`<sup>Required</sup> <a name="source" id="@raindancers/raindancers-crew.WebhookIngress.property.source"></a>
+
+```typescript
+public readonly source: ISecurityGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.ISecurityGroup
+
+Imported security group allowed to reach the webhook port.
+
+Passed as an
+`ISecurityGroup` (imported) — this construct never creates it.
+
+---
+
+##### `port`<sup>Optional</sup> <a name="port" id="@raindancers/raindancers-crew.WebhookIngress.property.port"></a>
+
+```typescript
+public readonly port: number;
+```
+
+- *Type:* number
+- *Default:* the resolved dashboardPort (5476)
+
+TCP port the ingress rule opens.
+
+Defaults to the dashboard/gateway port so
+a reverse proxy fronting the loopback gateway is reachable; override to
+target a consumer proxy on a different port.
 
 ---
 

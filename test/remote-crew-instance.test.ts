@@ -231,4 +231,85 @@ describe('RemoteCrewInstance', () => {
       expect(all).not.toContain('::/0');
     });
   });
+
+  // --- RC2: source-SG webhook ingress.
+  describe('RC2 source-SG webhook ingress', () => {
+    function synthWithSourceSg(port?: number) {
+      const app = new App();
+      const stack = new Stack(app, 'TestStack', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const sourceSg = new ec2.SecurityGroup(stack, 'IngestSg', { vpc });
+      new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+        webhookIngress: { source: sourceSg, ...(port ? { port } : {}) },
+      });
+      return Template.fromStack(stack);
+    }
+
+    test('adds a single ingress rule peered to the source SG on the default port (5476)', () => {
+      const t = synthWithSourceSg();
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            FromPort: 5476,
+            ToPort: 5476,
+            IpProtocol: 'tcp',
+            SourceSecurityGroupId: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('honours an explicit webhook port override', () => {
+      const t = synthWithSourceSg(8443);
+      t.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            FromPort: 8443,
+            ToPort: 8443,
+            SourceSecurityGroupId: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('never opens the webhook to a CIDR peer (no CIDR on any ingress rule)', () => {
+      const t = synthWithSourceSg();
+      const sgs = t.findResources('AWS::EC2::SecurityGroup');
+      // Inspect ONLY ingress rules — the default allowAllOutbound egress
+      // legitimately renders 0.0.0.0/0, so scanning the whole SG would false-positive.
+      const ingressRules = Object.values(sgs).flatMap(
+        (s: any) => s.Properties.SecurityGroupIngress ?? [],
+      );
+      const json = JSON.stringify(ingressRules);
+      expect(json).not.toContain('CidrIp');
+      expect(json).not.toContain('0.0.0.0/0');
+      expect(json).not.toContain('::/0');
+      // And exactly one ingress rule exists (the source-SG webhook rule).
+      expect(ingressRules).toHaveLength(1);
+    });
+
+    test('omitting webhookIngress leaves the SG no-inbound (golden unchanged)', () => {
+      synth().hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.absent(),
+      });
+    });
+
+    test('exposes the security group for consumer reference', () => {
+      const app = new App();
+      const stack = new Stack(app, 'S', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+      const vpc = new ec2.Vpc(stack, 'Vpc');
+      const crew = new RemoteCrewInstance(stack, 'Crew', {
+        vpc,
+        permissionsBoundaryArn: BOUNDARY,
+      });
+      expect(crew.securityGroup).toBeDefined();
+      expect(crew.securityGroup.securityGroupId).toBeDefined();
+    });
+  });
 });

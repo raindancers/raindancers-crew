@@ -59,6 +59,37 @@ export interface CrewSource {
 }
 
 /**
+ * Exposes the gateway's webhook port to ONE source security group.
+ *
+ * There is deliberately no CIDR form: the brain box is never internet-
+ * reachable by contract. The named source SG (e.g. an ingest Lambda's SG, or a
+ * reverse proxy that fronts the loopback gateway) is the only peer allowed to
+ * reach the port.
+ *
+ * NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only — it exposes no
+ * routable listener. This rule opens the security group so a consumer-owned
+ * reverse proxy / tunnel on the box can be reached from the source SG; actually
+ * serving the webhook on a routable interface is the consumer's concern (see
+ * README "Private dual-stack brain" and the webhook Decisions-for-review).
+ */
+export interface WebhookIngress {
+  /**
+   * Imported security group allowed to reach the webhook port. Passed as an
+   * `ISecurityGroup` (imported) — this construct never creates it.
+   */
+  readonly source: ec2.ISecurityGroup;
+
+  /**
+   * TCP port the ingress rule opens. Defaults to the dashboard/gateway port so
+   * a reverse proxy fronting the loopback gateway is reachable; override to
+   * target a consumer proxy on a different port.
+   *
+   * @default - the resolved dashboardPort (5476)
+   */
+  readonly port?: number;
+}
+
+/**
  * Properties for {@link RemoteCrewInstance}.
  */
 export interface RemoteCrewInstanceProps {
@@ -157,6 +188,15 @@ export interface RemoteCrewInstanceProps {
    * @default - no inbound; SSM-only
    */
   readonly allowSshCidr?: string;
+
+  /**
+   * Open the gateway/webhook port to ONE source security group only (never a
+   * CIDR). Independent of {@link allowSshCidr} — both, either, or neither may
+   * be set; unset leaves the SG no-inbound (the default).
+   *
+   * @default - no webhook ingress
+   */
+  readonly webhookIngress?: WebhookIngress;
 
   /**
    * How the KiroCrew source reaches the instance (S3 tarball or git clone).

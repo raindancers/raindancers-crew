@@ -238,7 +238,18 @@ export class RemoteCrewInstance extends Construct {
     });
     Tags.of(this.instance).add('Name', `kirocrew-${stackTag}`);
 
-    // --- IPv6 on the primary ENI (dual-stack). ec2.Instance exposes no IPv6
+    // --- IPv6 egress is handled at SG construction via allowAllIpv6Outbound
+    // (see the SecurityGroup above). Webhook ingress from a single source SG,
+    // gated on webhookIngress. Never a CIDR peer — the box is not internet-
+    // reachable by contract (RC2).
+    if (props.webhookIngress) {
+      const webhookPort = props.webhookIngress.port ?? dashboardPort;
+      this.securityGroup.addIngressRule(
+        ec2.Peer.securityGroupId(props.webhookIngress.source.securityGroupId),
+        ec2.Port.tcp(webhookPort),
+        'Native webhook reach from the source SG only (no CIDR)',
+      );
+    }
     // prop, so set it on the underlying CfnInstance. The VPC owns the subnet
     // IPv6 CIDR + Egress-Only IGW + routes (see enableIpv6 doc / RC5).
     if (props.enableIpv6) {
