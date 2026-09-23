@@ -14,6 +14,12 @@ This spec is a **change order against the existing construct**, written against 
 **additive and backward-compatible**: current consumers (public-subnet default, SSM-only, no
 webhook) keep working with unchanged behaviour.
 
+**Driving consumer:** these changes are required by the 55minutes cloud-orchestrator spec and its
+prop-mapping table ("Props the L3 passes to `RemoteCrewInstance`") in
+bwip-holdings/55minutes PR #15 (https://github.com/bwip-holdings/55minutes/pull/15). Increment 6 of
+that spec is blocked on this construct work landing. The prop names defined here (`enableIpv6`,
+`webhookIngress`, `webhookTokenSecretArn`, `crewRuntime`) are the exact names that PR references.
+
 ## Baseline — what the construct is today (do not re-derive)
 
 `RemoteCrewInstanceProps` (current, verbatim): `vpc` (req), `permissionsBoundaryArn` (req),
