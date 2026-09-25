@@ -1,13 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  Annotations,
+  CfnOutput,
   CfnWaitCondition,
   CfnWaitConditionHandle,
+  Stack,
   Tags,
   Token,
 } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import {
   CrewArchitecture,
@@ -65,6 +69,12 @@ export class RemoteCrewInstance extends Construct {
         `allowSshCidr must be a CIDR no wider than /16 (got '${props.allowSshCidr}')`,
       );
     }
+    if (props.webhookIngress && !props.webhookTokenSecretArn) {
+      throw new Error(
+        'webhookIngress requires webhookTokenSecretArn: a reachable webhook ' +
+        'with no Bearer token is a defect, not a default.',
+      );
+    }
 
     const arch = props.architecture ?? CrewArchitecture.ARM64;
     const source = props.source ?? {};
@@ -102,6 +112,9 @@ export class RemoteCrewInstance extends Construct {
       vpc: props.vpc,
       description: `KiroCrew ${stackTag} - SSM-only (no inbound by default)`,
       allowAllOutbound: true,
+      // CDK's allowAllOutbound renders IPv4 0.0.0.0/0 egress only; a dual-stack
+      // instance needs IPv6 egress explicitly or its IPv6 traffic is dropped.
+      allowAllIpv6Outbound: props.enableIpv6 ?? false,
     });
     if (props.allowSshCidr) {
       this.securityGroup.addIngressRule(
@@ -139,9 +152,95 @@ export class RemoteCrewInstance extends Construct {
       'SOURCE_KEY=' + shellQuote(source.sourceKey ?? ''),
       'KIROCREW_REPO=' + shellQuote(source.kirocrewRepo ?? DEFAULT_REPO),
       'KIROCREW_REF=' + shellQuote(source.kirocrewRef ?? DEFAULT_REF),
-      'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF',
-      bootstrapBody,
+      'WEBHOOK_TOKEN_SECRET_ARN=' + shellQuote(props.webhookTokenSecretArn ?? ''),
+      'export WAIT_HANDLE DASHBOARD_PORT SOURCE_BUCKET SOURCE_KEY KIROCREW_REPO KIROCREW_REF WEBHOOK_TOKEN_SECRET_ARN',
     );
+
+    // --- Always-on crew runtime (RC4): autopilot + no-idle-close, threaded
+    // into config.json at boot. Empty => current gateway defaults, unchanged.
+    userData.addCommands(
+      'CREW_AUTOPILOT=' + shellQuote(props.crewRuntime?.autopilot ? '1' : ''),
+      'CREW_DISABLE_IDLE_CLOSE=' +
+        shellQuote(props.crewRuntime?.disableIdleClose ? '1' : ''),
+      'export CREW_AUTOPILOT CREW_DISABLE_IDLE_CLOSE',
+    );
+
+    // --- Webhook Bearer token: grant GetSecretValue on the one ARN only; the
+    // token is fetched at boot and written into config.json (RC3). Loopback-
+    // only bind is unchanged — routable exposure is a consumer concern.
+    if (props.webhookTokenSecretArn) {
+      const webhookSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'WebhookToken',
+        props.webhookTokenSecretArn,
+      );
+      webhookSecret.grantRead(this.role);
+    }
+
+    // --- Off-box backup wiring (only when a backup bucket is configured).
+    if (props.backupBucket) {
+      props.backupBucket.grantWrite(this.role);
+      props.backupBucket.grantRead(this.role); // read too, so this box can self-restore
+      let prefix = props.backupPrefix ?? 'crew-snapshots/';
+      if (!prefix.endsWith('/')) {
+        prefix = `${prefix}/`;
+      }
+      const schedule = props.backupSchedule ?? 'daily';
+      const region = Stack.of(this).region;
+      const backupBody = fs.readFileSync(resolveAsset('backup.sh'), 'utf8');
+      const restoreBody = fs.readFileSync(resolveAsset('restore-from-s3.sh'), 'utf8');
+      userData.addCommands(
+        // Header the backup + restore scripts read.
+        'BACKUP_BUCKET=' + shellQuote(props.backupBucket.bucket.bucketName),
+        'BACKUP_PREFIX=' + shellQuote(prefix),
+        'AWS_REGION_ARG=' + shellQuote(Token.isUnresolved(region) ? '' : `--region ${region}`),
+        'export BACKUP_BUCKET BACKUP_PREFIX AWS_REGION_ARG',
+        // Install the backup script.
+        "cat > /usr/local/sbin/kirocrew-backup <<'KCBACKUP'",
+        backupBody,
+        'KCBACKUP',
+        'chmod 0755 /usr/local/sbin/kirocrew-backup',
+        // The backup/restore scripts need the header env at RUN time (the timer
+        // runs them fresh), so bake it into an env file both units read.
+        'mkdir -p /etc/kirocrew',
+        'cat > /etc/kirocrew/backup.env <<KCENV',
+        `BACKUP_BUCKET=${props.backupBucket.bucket.bucketName}`,
+        `BACKUP_PREFIX=${prefix}`,
+        `AWS_REGION_ARG=${Token.isUnresolved(region) ? '' : `--region ${region}`}`,
+        'KCENV',
+        // Install the restore helper.
+        "cat > /usr/local/sbin/kirocrew-restore-from-s3 <<'KCRESTORE'",
+        restoreBody,
+        'KCRESTORE',
+        'chmod 0755 /usr/local/sbin/kirocrew-restore-from-s3',
+        // systemd service + timer for the scheduled backup.
+        'cat > /etc/systemd/system/kirocrew-backup.service <<UNIT',
+        '[Unit]',
+        'Description=KiroCrew snapshot-to-S3 backup',
+        'After=kirocrew.service',
+        '',
+        '[Service]',
+        'Type=oneshot',
+        'EnvironmentFile=/etc/kirocrew/backup.env',
+        'ExecStart=/usr/local/sbin/kirocrew-backup',
+        'UNIT',
+        'cat > /etc/systemd/system/kirocrew-backup.timer <<UNIT',
+        '[Unit]',
+        'Description=Run KiroCrew snapshot-to-S3 backup on a schedule',
+        '',
+        '[Timer]',
+        `OnCalendar=${schedule}`,
+        'Persistent=true',
+        '',
+        '[Install]',
+        'WantedBy=timers.target',
+        'UNIT',
+        'systemctl daemon-reload',
+        'systemctl enable --now kirocrew-backup.timer || true',
+      );
+    }
+
+    userData.addCommands(bootstrapBody);
 
     // --- The instance. IMDSv2 enforced (prompt-injectable agent must not be
     // able to read role creds via IMDSv1), encrypted gp3 root.
@@ -168,6 +267,44 @@ export class RemoteCrewInstance extends Construct {
     });
     Tags.of(this.instance).add('Name', `kirocrew-${stackTag}`);
 
+    // --- IPv6 egress is handled at SG construction via allowAllIpv6Outbound
+    // (see the SecurityGroup above). Webhook ingress from a single source SG,
+    // gated on webhookIngress. Never a CIDR peer — the box is not internet-
+    // reachable by contract (RC2).
+    if (props.webhookIngress) {
+      const webhookPort = props.webhookIngress.port ?? dashboardPort;
+      this.securityGroup.addIngressRule(
+        ec2.Peer.securityGroupId(props.webhookIngress.source.securityGroupId),
+        ec2.Port.tcp(webhookPort),
+        'Native webhook reach from the source SG only (no CIDR)',
+      );
+    }
+    // prop, so set it on the underlying CfnInstance. The VPC owns the subnet
+    // IPv6 CIDR + Egress-Only IGW + routes (see enableIpv6 doc / RC5).
+    if (props.enableIpv6) {
+      const cfnInstance = this.instance.node.defaultChild as ec2.CfnInstance;
+      cfnInstance.ipv6AddressCount = 1;
+
+      // Best-effort synth-time note when the resolved subnets expose no IPv6
+      // CIDR. Subnet IPv6 state is only knowable for concrete (non-token)
+      // subnets; a token means a looked-up/imported VPC where we cannot see it,
+      // so we stay silent rather than warn spuriously.
+      const selected = props.vpc.selectSubnets(
+        props.vpcSubnets ?? { subnetType: ec2.SubnetType.PUBLIC },
+      );
+      const anyWithoutIpv6 = selected.subnets.some(
+        (s) => !Token.isUnresolved(s.ipv4CidrBlock) && !hasIpv6(s),
+      );
+      if (anyWithoutIpv6) {
+        Annotations.of(this).addWarning(
+          'enableIpv6 is set but at least one selected subnet exposes no IPv6 ' +
+          'CIDR. Ensure the VPC assigns IPv6 CIDRs to these subnets and has an ' +
+          'Egress-Only Internet Gateway route — this construct provisions none ' +
+          'of that (consumer VPC responsibility).',
+        );
+      }
+    }
+
     // Discovery tags on the instance and SG (matches the registry contract).
     for (const taggable of [this.instance, this.securityGroup]) {
       Tags.of(taggable).add('kirocrew:managed', 'true');
@@ -184,6 +321,21 @@ export class RemoteCrewInstance extends Construct {
     waitCondition.addDependency(
       this.instance.node.defaultChild as ec2.CfnInstance,
     );
+
+    // Outputs so the connect step can read the instance id from the stack.
+    // Export names are derived from the stack tag so they are predictable for a
+    // `describe-stacks` / cross-stack lookup (the generated logical id is
+    // scope-prefixed and hashed, so match on the export name, not the id).
+    new CfnOutput(this, 'CrewInstanceId', {
+      value: this.instance.instanceId,
+      description: 'EC2 instance id — the SSM target for connecting.',
+      exportName: `kirocrew-${stackTag}-instance-id`,
+    });
+    new CfnOutput(this, 'CrewPublicDnsName', {
+      value: this.instance.instancePublicDnsName,
+      description: 'Public DNS (diagnostics only; access is via SSM, never direct).',
+      exportName: `kirocrew-${stackTag}-public-dns`,
+    });
   }
 
   /** Public DNS of the instance (diagnostics only; access is via SSM). */
@@ -197,9 +349,22 @@ export class RemoteCrewInstance extends Construct {
   }
 }
 
+/**
+ * Whether a subnet carries an IPv6 CIDR association. CDK does not surface this
+ * on ISubnet, so read the underlying CfnSubnet's ipv6CidrBlock when available.
+ * Returns false when it cannot be determined (best-effort synth-time note).
+ */
+function hasIpv6(subnet: ec2.ISubnet): boolean {
+  const cfn = subnet.node.defaultChild as ec2.CfnSubnet | undefined;
+  if (!cfn) {
+    return false;
+  }
+  const block = cfn.ipv6CidrBlock;
+  return block !== undefined && block !== null && block !== '';
+}
+
 /** Single-quote a literal for safe embedding; pass CDK tokens through. */
-function shellQuote(value: string): string {
-  // An unresolved CDK token (e.g. the WaitHandle ref) must reach CloudFormation
+function shellQuote(value: string): string { // An unresolved CDK token (e.g. the WaitHandle ref) must reach CloudFormation
   // intact — UserData interpolation resolves it. Only literals are quoted.
   if (Token.isUnresolved(value)) {
     return value;

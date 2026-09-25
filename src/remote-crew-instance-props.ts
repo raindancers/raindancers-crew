@@ -1,4 +1,6 @@
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 /**
  * CPU architecture for the KiroCrew EC2 instance. Selects the matching
@@ -54,6 +56,69 @@ export interface CrewSource {
    * @default 'main'
    */
   readonly kirocrewRef?: string;
+}
+
+/**
+ * Exposes the gateway's webhook port to ONE source security group.
+ *
+ * There is deliberately no CIDR form: the brain box is never internet-
+ * reachable by contract. The named source SG (e.g. an ingest Lambda's SG, or a
+ * reverse proxy that fronts the loopback gateway) is the only peer allowed to
+ * reach the port.
+ *
+ * NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only — it exposes no
+ * routable listener. This rule opens the security group so a consumer-owned
+ * reverse proxy / tunnel on the box can be reached from the source SG; actually
+ * serving the webhook on a routable interface is the consumer's concern (see
+ * README "Private dual-stack brain" and the webhook Decisions-for-review).
+ */
+export interface WebhookIngress {
+  /**
+   * Imported security group allowed to reach the webhook port. Passed as an
+   * `ISecurityGroup` (imported) — this construct never creates it.
+   */
+  readonly source: ec2.ISecurityGroup;
+
+  /**
+   * TCP port the ingress rule opens. Defaults to the dashboard/gateway port so
+   * a reverse proxy fronting the loopback gateway is reachable; override to
+   * target a consumer proxy on a different port.
+   *
+   * @default - the resolved dashboardPort (5476)
+   */
+  readonly port?: number;
+}
+
+/**
+ * Always-on runtime settings for the hosted crew, threaded into the crew
+ * `config.json` at boot. All fields are optional and default to the current
+ * gateway behaviour; omitting {@link RemoteCrewInstanceProps.crewRuntime}
+ * entirely reproduces today's `kirocrew setup --agent-only` + `kirocrew
+ * gateway` exactly.
+ *
+ * Verified against KiroCrew v0.6.0: autopilot maps to `agent.approval_mode`,
+ * idle-close maps to `session.timeout_secs`, and the conductor roster ships
+ * with `setup --agent-only` (custom members are source-delivered JSON under
+ * `~/.kiro/agents/`).
+ */
+export interface CrewRuntime {
+  /**
+   * Enable Autopilot: the hosted crew auto-approves tool calls that pass its
+   * security checks (deny rules and sensitive-path blocks still apply). Sets
+   * `agent.approval_mode` to `"auto"` in config.json.
+   *
+   * @default false (interactive; gateway default)
+   */
+  readonly autopilot?: boolean;
+
+  /**
+   * Keep the 24/7 brain session alive between events by disabling the idle
+   * session sweep. Sets `session.timeout_secs` to `0` (documented: "0 disables
+   * the idle sweep").
+   *
+   * @default false (default 3600s idle timeout applies)
+   */
+  readonly disableIdleClose?: boolean;
 }
 
 /**
@@ -115,6 +180,24 @@ export interface RemoteCrewInstanceProps {
   readonly associatePublicIp?: boolean;
 
   /**
+   * Assign an IPv6 address to the instance's primary ENI and permit IPv6
+   * egress on the security group.
+   *
+   * Enables a dual-stack posture: combined with `associatePublicIp: false` and
+   * a private, IPv6-capable subnet, the instance egresses over IPv6 (via the
+   * VPC's Egress-Only Internet Gateway) with no public IPv4. CDK's
+   * `allowAllOutbound` renders IPv4 `0.0.0.0/0` egress only, so this also adds
+   * an explicit all-traffic IPv6 egress rule.
+   *
+   * This construct does NOT provision subnet IPv6 CIDRs, an Egress-Only
+   * Internet Gateway, or any route — those are the consumer VPC's
+   * responsibility. The selected subnet(s) MUST already carry IPv6 CIDRs.
+   *
+   * @default false
+   */
+  readonly enableIpv6?: boolean;
+
+  /**
    * Discovery tag value written as `kirocrew:instance`. Must match
    * `[a-zA-Z0-9-]{1,51}`.
    *
@@ -139,6 +222,43 @@ export interface RemoteCrewInstanceProps {
   readonly allowSshCidr?: string;
 
   /**
+   * Open the gateway/webhook port to ONE source security group only (never a
+   * CIDR). Independent of {@link allowSshCidr} — both, either, or neither may
+   * be set; unset leaves the SG no-inbound (the default).
+   *
+   * @default - no webhook ingress
+   */
+  readonly webhookIngress?: WebhookIngress;
+
+  /**
+   * Secrets Manager ARN of the Bearer token that authenticates the native
+   * webhook (`POST /api/hooks/agent`). At boot the instance fetches the secret
+   * and writes it as `hooks.webhook_token` in the crew `config.json` — the
+   * token is never baked into userData, env literals, or code. The instance
+   * role is granted `secretsmanager:GetSecretValue` on THIS ARN only.
+   *
+   * Required when {@link webhookIngress} is set: a reachable webhook with no
+   * auth is a defect, not a default, so synth fails if ingress is opened
+   * without a token.
+   *
+   * NOTE: the KiroCrew gateway binds loopback (`127.0.0.1`) only and exposes no
+   * routable webhook listener — see the webhook Decisions-for-review in the PR.
+   * This wires the AUTH (token-in-config); routable exposure of the loopback
+   * route is a consumer reverse-proxy / tunnel concern.
+   *
+   * @default - webhook auth not configured (loopback / SSM only)
+   */
+  readonly webhookTokenSecretArn?: string;
+
+  /**
+   * Always-on runtime settings (Autopilot, no-idle-close) for the hosted crew,
+   * threaded into config.json at boot. Omit for the current gateway defaults.
+   *
+   * @default - current gateway behaviour (interactive, 3600s idle timeout)
+   */
+  readonly crewRuntime?: CrewRuntime;
+
+  /**
    * How the KiroCrew source reaches the instance (S3 tarball or git clone).
    *
    * @default - clone kirodotdev/KiroCrew@main
@@ -152,4 +272,45 @@ export interface RemoteCrewInstanceProps {
    * @default 25
    */
   readonly bootstrapTimeoutMinutes?: number;
+
+  /**
+   * An S3 backup bucket to push crew snapshots to on a schedule. When set, the
+   * instance role is granted write, a systemd timer runs
+   * `kirocrew snapshot --purpose backup` and uploads the newest (redaction-
+   * scrubbed) bundle, and a `kirocrew-restore-from-s3` helper is installed for
+   * rebuilding a replacement instance. Omit to disable off-box backup.
+   *
+   * @default - no off-box backup
+   */
+  readonly backupBucket?: ICrewBackupBucket;
+
+  /**
+   * systemd OnCalendar expression for the backup timer (see
+   * `man systemd.time`). Only used when {@link backupBucket} is set.
+   *
+   * @default 'daily'
+   */
+  readonly backupSchedule?: string;
+
+  /**
+   * S3 key prefix under which snapshots are stored in the backup bucket.
+   * Only used when {@link backupBucket} is set. A trailing slash is added if
+   * absent.
+   *
+   * @default 'crew-snapshots/'
+   */
+  readonly backupPrefix?: string;
+}
+
+/**
+ * The subset of {@link CrewBackupBucket} the EC2/Fargate constructs need. Kept
+ * as an interface so a consumer can pass their own bucket wrapper.
+ */
+export interface ICrewBackupBucket {
+  /** The destination bucket name. */
+  readonly bucket: s3.IBucket;
+  /** Grant a principal write access to snapshots (bucket + KMS). */
+  grantWrite(grantee: iam.IGrantable): void;
+  /** Grant a principal read access to snapshots (bucket + KMS). */
+  grantRead(grantee: iam.IGrantable): void;
 }
