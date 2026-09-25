@@ -4,6 +4,43 @@ A CDK construct that provisions a **self-hosted [KiroCrew](https://github.com/ki
 
 It is a pipeline-native, version-controlled port of the upstream `kirocrew-ec2` CloudFormation template. Where the native `kirocrew cloud launch` is an imperative one-shot, this construct lets you deploy the same shape **through your own CDK pipeline**, under **your** naming, permissions boundary, and OIDC deploy role — so a remote crew becomes a reviewed, repeatable, diffable artifact like everything else you ship.
 
+## Architecture
+
+What `RemoteCrewInstance` creates (solid) and what your VPC/app owns (dashed). The default is the SSM-only public-subnet box; the IPv6 egress and webhook ingress are opt-in props.
+
+```mermaid
+flowchart TB
+  subgraph vpc["Your VPC (you own routing)"]
+    subgraph subnet["Subnet (public, or private-with-egress)"]
+      instance["EC2 instance<br/>Amazon Linux 2023, IMDSv2<br/>encrypted gp3 root<br/>kirocrew gateway on 127.0.0.1:5476"]
+      sg["Security group<br/>no inbound by default<br/>IPv6 egress if enableIpv6<br/>webhook port if webhookIngress"]
+      instance --- sg
+    end
+    eigw(["Egress-Only IGW<br/>(consumer-owned, IPv6)"])
+    nat(["NAT / fck-nat<br/>(consumer-owned, IPv4)"])
+    proxy(["Reverse proxy<br/>(consumer-owned, fronts loopback webhook)"])
+  end
+
+  role["IAM role<br/>SSM core + required permissions boundary<br/>scoped S3 GetObject / secret GetSecretValue"]
+  wait["WaitCondition<br/>blocks stack until gateway is healthy"]
+  operator(["Operator"])
+  secret[("Secrets Manager<br/>webhook Bearer token")]
+  ingest(["Ingest Lambda SG<br/>(consumer-owned)"])
+
+  instance --- role
+  instance -.-> wait
+  operator -- "SSM port-forward (no inbound)" --> instance
+  instance -. "IPv6 egress" .-> eigw
+  instance -. "IPv4 egress" .-> nat
+  ingest -. "webhook, source-SG only" .-> proxy -.-> instance
+  instance -. "fetch token at boot" .-> secret
+
+  classDef owned fill:#e8f0fe,stroke:#4285f4;
+  classDef consumer fill:#f5f5f5,stroke:#999,stroke-dasharray:4 3;
+  class instance,sg,role,wait owned;
+  class eigw,nat,proxy,ingest,secret consumer;
+```
+
 ## Getting started
 
 ### 1. Install
@@ -191,6 +228,169 @@ in your VPC / app, not the library:
   **consumer-owned reverse proxy or SSH tunnel on the box** is what actually
   forwards `POST /api/hooks/agent` from the source SG to the loopback gateway.
   The dashboard stays loopback/SSM-only regardless.
+
+## Examples
+
+Worked implementations for the common shapes. Each is a complete construct
+instantiation against the real props — fill in your account, region, VPC, and
+permissions-boundary ARN.
+
+### 1. Minimal SSM-only crew (the simplest thing that works)
+
+A single crew box in a public subnet, reached only over SSM. No backup, no
+webhook, defaults everywhere.
+
+```ts
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { RemoteCrewInstance } from '@raindancers/raindancers-crew';
+
+const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { isDefault: true });
+
+new RemoteCrewInstance(this, 'Crew', {
+  vpc,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+  // Pin a released tag for reproducible deploys — the default `main` drifts.
+  source: { kirocrewRef: 'v0.8.0' },
+});
+```
+
+### 2. Crew with off-box backup
+
+Add a hardened, versioned, KMS-encrypted backup bucket; the construct grants the
+instance role write + read and installs a daily snapshot timer.
+
+```ts
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import {
+  RemoteCrewInstance,
+  CrewBackupBucket,
+  CrewArchitecture,
+} from '@raindancers/raindancers-crew';
+
+const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { isDefault: true });
+const backup = new CrewBackupBucket(this, 'CrewBackup');
+
+new RemoteCrewInstance(this, 'Crew', {
+  vpc,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+  architecture: CrewArchitecture.ARM64,
+  instanceType: new ec2.InstanceType('m7g.2xlarge'),
+  source: { kirocrewRef: 'v0.8.0' },
+  backupBucket: backup,
+  backupSchedule: 'daily',           // systemd OnCalendar expression
+  backupPrefix: 'crew-snapshots/',
+});
+```
+
+### 3. Source from an S3 tarball instead of a git clone
+
+For air-gapped or pinned-artifact deploys: the instance role is granted
+`s3:GetObject` on exactly that one object, nothing wider.
+
+```ts
+new RemoteCrewInstance(this, 'Crew', {
+  vpc,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+  source: {
+    sourceBucket: 'my-artifacts-bucket',
+    sourceKey: 'kirocrew/kirocrew-src-v0.8.0.tar.gz',
+  },
+});
+```
+
+### 4. Private dual-stack always-on brain (the full 55minutes posture)
+
+Private subnet, IPv6 egress, no public IPv4, webhook reachable from one source
+SG, authenticated by a Secrets Manager token, running as an autopilot crew that
+never idle-closes. See [Private dual-stack brain](#private-dual-stack-brain-55minutes-posture)
+above for the prop-by-prop walkthrough.
+
+```ts
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { RemoteCrewInstance, CrewArchitecture } from '@raindancers/raindancers-crew';
+
+// ingestLambdaSg: the SG of your ingest Lambda / reverse proxy — imported.
+new RemoteCrewInstance(this, 'Brain', {
+  vpc,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-ec2-boundary',
+  architecture: CrewArchitecture.ARM64,
+  source: { kirocrewRef: 'v0.8.0' },
+
+  vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+  associatePublicIp: false,
+  enableIpv6: true,
+
+  webhookIngress: { source: ingestLambdaSg },
+  webhookTokenSecretArn:
+    'arn:aws:secretsmanager:eu-west-2:123456789012:secret:kc/webhook-token-AbCdEf',
+
+  crewRuntime: { autopilot: true, disableIdleClose: true },
+});
+```
+
+### 5. Fargate lane — shared base + one crew
+
+For a container-based crew: `FargateCrewBase` once per account/region (the ECS
+cluster + egress-only SG), then one `FargateCrew` per crew (its two roles + log
+group). Deleting a crew never touches the shared cluster.
+
+```ts
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import {
+  FargateCrewBase,
+  FargateCrew,
+  FargateCpuArchitecture,
+  CrewBackupBucket,
+} from '@raindancers/raindancers-crew';
+
+const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { isDefault: true });
+const backup = new CrewBackupBucket(this, 'CrewBackup');
+
+// One per account/region — the shared cluster + egress-only task SG.
+const base = new FargateCrewBase(this, 'CrewBase', {
+  vpc,
+  cpuArchitecture: FargateCpuArchitecture.ARM64,
+});
+
+// One per crew — roles + log group. Task role gets the backup write grant
+// (the running container pushes snapshots), NEVER a secret-read grant.
+const crew = new FargateCrew(this, 'ResearchCrew', {
+  crew: 'research',
+  logRetentionDays: 30,
+  permissionsBoundaryArn:
+    'arn:aws:iam::123456789012:policy/kirocrew-crew-boundary',
+  backupBucket: backup,
+});
+
+// base.cluster, base.securityGroup, crew.executionRole, crew.taskRole,
+// crew.logGroup, crew.secretNamePrefix are exposed for your RunTask launch spec.
+```
+
+### Access + webhook flow
+
+How the crew is reached — SSM for the operator, the source-SG + reverse proxy
+for the native webhook. Nothing dials the box directly.
+
+```mermaid
+sequenceDiagram
+  actor Op as Operator
+  participant SSM as SSM Session Manager
+  participant GW as Gateway (127.0.0.1:5476)
+  Op->>SSM: aws ssm start-session (port-forward)
+  SSM->>GW: tunnel to loopback dashboard
+  GW-->>Op: dashboard on localhost
+
+  participant Src as Ingest Lambda (source SG)
+  participant RP as Reverse proxy (consumer)
+  participant Hook as Gateway /api/hooks/agent (loopback)
+  Src->>RP: POST webhook (SG allows source only)
+  RP->>Hook: forward with Bearer token
+  Hook-->>RP: 202 accepted (agent turn queued)
+```
 
 ## Connecting
 
