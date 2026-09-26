@@ -418,6 +418,64 @@ Security invariants preserved from upstream: task role has no policies and never
 
 **EC2 vs Fargate:** EC2 gives a persistent box with local disk (the crew's memory/knowledge DBs live on the instance) and is the native launcher's default; Fargate is more ephemeral and expects external persistence. For a remote crew that remembers across sessions, EC2 is usually the better fit.
 
+## ECS-on-EC2 multi-crew host
+
+`EcsCrewHost` runs several isolated Kiro Crew instances on ONE self-provisioned EC2 host, each crew as its own ECS-on-EC2 container task. It builds on the same `FargateCrewBase` cluster and `FargateCrew` per-crew identity, adds the EC2 capacity, and wires the two-subnet host-NAT networking. It is strictly additive: `crewCount` defaults to 1, so a plain instantiation behaves like a single crew and existing consumers gain nothing new.
+
+```ts
+import { EcsCrewHost, CrewBackupBucket } from '@raindancers/raindancers-crew';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+
+const backup = new CrewBackupBucket(this, 'CrewBackup');
+
+new EcsCrewHost(this, 'CrewFleet', {
+  vpc,                                  // you supply the two-subnet host-NAT VPC
+  permissionsBoundaryArn: '...',        // host role boundary (required)
+  crewPermissionsBoundaryArn: '...',    // kirocrew-crew-boundary for the crew roles
+  instanceType: new ec2.InstanceType('m9g.xlarge'),
+  crewCount: 3,
+  crewDataVolumeSizeGb: 20,
+  backupBucket: backup,
+  stackTag: 'fiftyfive',
+});
+```
+
+What it creates:
+
+| Resource | Notes |
+|---|---|
+| ECS cluster + egress-only task SG | Reused from `FargateCrewBase` (one per account/region) |
+| Size-1 Auto Scaling Group + capacity provider | ONE self-provisioned host, arch-aware ECS-optimized AL2023 AMI, **IMDSv2 enforced**, **encrypted gp3** root. A size-1 ASG is still one EC2 host; the capacity provider is what registers it with the cluster so the L2 `Ec2Service` can schedule onto it |
+| Per-crew EC2 task definition + service | `awsvpc` network mode (each task its own ENI + private IP), `desiredCount: 1`, egress-only task SG, **no public IP**. Reuses each crew's `FargateCrew` task/execution role and `/kirocrew/crew/<crew>` log group |
+| Per-crew durable EBS | one encrypted **gp3** volume per crew, **`deleteOnTermination: false`** so a crew's `~/.kiro/crew` outlives an instance replacement. Resolved in the bootstrap by a stable filesystem **label**, never `/dev/sdf` (the Nitro NVMe layer renames it) |
+| Host role grant | scoped `ec2:ModifyInstanceAttribute` (tag-conditioned to KiroCrew ECS hosts) so the host disables its own source/dest check for NAT |
+
+Networking model (you supply the VPC; the construct does NOT create a NAT Gateway, fck-nat, VPC endpoints, or an ALB):
+
+- **PUBLIC subnet** holds the host ENI + Elastic IP + the IGW route. The host egresses directly via the IGW.
+- **PRIVATE subnet** holds the crew task ENIs. Its `0.0.0.0/0` route points at the host ENI. The host does the NAT: the bootstrap sets `net.ipv4.ip_forward=1` and an iptables `MASQUERADE` rule, and the host disables source/dest check on its own ENI. Tasks have no public IPs.
+
+Isolation is container-level (shared kernel), accepted as sufficient: Graviton Nitro protects the box from other AWS tenants, and containers cover crew-to-crew separation. Two cautions this bakes into the props and tests:
+
+- **Host-OOM cross-crew blast radius.** Each crew container carries a SOFT `memoryReservationMiB` (for scheduling) and a HARD `memoryLimitMiB` (its ceiling). Hard caps bound each crew, but because the kernel is shared, if the sum of ACTUAL usage exceeds physical RAM the host OOM-killer can hit any crew. For a hard guarantee set the sum of hard caps at or below (physical RAM minus host + ECS-agent headroom). This is the accepted cost of container isolation versus microVMs.
+- **awsvpc ENI budget.** Each task takes one ENI, plus the host ENI, so you need at least `crewCount + 1` ENIs on the instance type. `crewCount` is validated 1..8. The bootstrap enables ENI trunking (`ECS_ENABLE_AWSVPC_TRUNKING`) which raises the per-instance task-ENI budget on smaller sizes; confirm the chosen `m9g` size carries `crewCount + 1` ENIs before you build.
+
+### Optional webhook ingress (`CrewWebhookIngress`)
+
+Because each task has a real private VPC IP, an in-VPC Lambda can POST to a crew's `POST /api/hooks/agent` directly, with no VPC endpoint. `CrewWebhookIngress` is an OPTIONAL composable sub-construct (mirroring `CrewBackupBucket`): OFF by default, so an existing consumer gains no new resources. When instantiated it creates an SNS topic, an in-VPC arm64 Lambda under the boundary, and the ONE controlled inbound exception to the egress-only task model: a scoped ingress rule on the crew task SG from the Lambda's SG on the crew port only, never a CIDR. It ships no webhook-to-crew routing opinion; you supply the Lambda `code`.
+
+```ts
+import { CrewWebhookIngress } from '@raindancers/raindancers-crew';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+
+new CrewWebhookIngress(this, 'Webhook', {
+  vpc,
+  host,                               // the EcsCrewHost above
+  permissionsBoundaryArn: '...',
+  code: lambda.Code.fromAsset('path/to/ingress-lambda'),
+});
+```
+
 ## Backing up the crew's learnings
 
 A remote crew's value is its accumulated memory, lessons, and knowledge — which on the EC2 lane live on the instance's local disk. KiroCrew's built-in backup (`kirocrew snapshot`) produces a redaction-scrubbed bundle (the signing key, `.env`, and execution logs never ship), but writes it **locally** — so it survives corruption, not instance loss. These constructs add the missing **off-box durability**.
