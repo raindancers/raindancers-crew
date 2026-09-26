@@ -33,6 +33,20 @@ describe('FargateCrewBase', () => {
     });
   });
 
+  test('task security group allows all outbound IPv6 (dual-stack egress)', () => {
+    // allowAllIpv6Outbound:true makes CDK emit an IPv6 all-traffic egress rule
+    // (IpProtocol -1, CidrIpv6 ::/0) inline on the SG resource, alongside the
+    // IPv4 0.0.0.0/0 rule. Counterpart to 55minutes PR #17's dual-stack VPC.
+    baseTemplate().hasResourceProperties('AWS::EC2::SecurityGroup', {
+      SecurityGroupEgress: Match.arrayWith([
+        Match.objectLike({
+          CidrIpv6: '::/0',
+          IpProtocol: '-1',
+        }),
+      ]),
+    });
+  });
+
   test('rejects an invalid stackTag', () => {
     expect(() => baseTemplate({ stackTag: 'bad/tag' })).toThrow();
   });

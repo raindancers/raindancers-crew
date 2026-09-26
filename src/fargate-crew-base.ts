@@ -99,6 +99,10 @@ export class FargateCrewBase extends Construct {
       vpc: props.vpc,
       description: `Kiro Crew Fargate crews ${stackTag} - egress only, no inbound`,
       allowAllOutbound: true,
+      // CDK's allowAllOutbound renders IPv4 0.0.0.0/0 egress only; a dual-stack
+      // VPC also needs an IPv6 ::/0 egress rule or tasks silently drop outbound
+      // IPv6. Counterpart to bwip-holdings/55minutes PR #17's dual-stack VPC.
+      allowAllIpv6Outbound: true,
     });
 
     for (const taggable of [this.cluster, this.securityGroup]) {
