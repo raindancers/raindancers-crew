@@ -5,7 +5,7 @@ run-name: ${{ inputs.dry_run && format('[DRY RUN] release by @{0}', github.actor
 on:
   push:
     branches:
-      - main
+      - feat/remote-crew-instance
   workflow_dispatch:
     inputs:
       dry_run:
@@ -42,8 +42,8 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci
-      - name: release
-        run: npx projen release
+      - name: release:feat/remote-crew-instance
+        run: npx projen release:feat/remote-crew-instance
       - name: Check if version has already been tagged
         id: check_tag_exists
         run: |-

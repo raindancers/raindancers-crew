@@ -207,9 +207,9 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "release": {
-      "name": "release",
-      "description": "Prepare a release from \"main\" branch",
+    "release:feat/remote-crew-instance": {
+      "name": "release:feat/remote-crew-instance",
+      "description": "Prepare a release from \"feat/remote-crew-instance\" branch",
       "env": {
         "RELEASE": "true"
       },
