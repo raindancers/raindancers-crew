@@ -211,6 +211,492 @@ The KMS key encrypting the bucket.
 ---
 
 
+### CrewWebhookIngress <a name="CrewWebhookIngress" id="@raindancers/raindancers-crew.CrewWebhookIngress"></a>
+
+OPTIONAL, composable webhook-ingress path for {@link EcsCrewHost}, mirroring the optional {@link CrewBackupBucket } shape.
+
+Nothing is created unless the
+consumer instantiates it, so an existing consumer gains no new resources.
+
+Because each crew task runs in awsvpc mode with a real private VPC IP, an
+in-VPC Lambda can POST to a crew's `POST /api/hooks/agent` DIRECTLY — no VPC
+endpoint, no PrivateLink, no ALB. This construct wires: an SNS topic, an
+in-VPC Lambda under the permissions boundary, and a scoped ingress rule on
+the crew task security group from the Lambda's SG on the crew port ONLY.
+That ingress rule is the single controlled inbound exception to the
+egress-only task model.
+
+Greenfield: the construct wires the plumbing but ships no webhook-to-crew
+routing opinion — the consumer supplies the Lambda {@link CrewWebhookIngressProps.code}.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.CrewWebhookIngress.Initializer"></a>
+
+```typescript
+import { CrewWebhookIngress } from '@raindancers/raindancers-crew'
+
+new CrewWebhookIngress(scope: Construct, id: string, props: CrewWebhookIngressProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps">CrewWebhookIngressProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.CrewWebhookIngress.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps">CrewWebhookIngressProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.with">with</a></code> | Applies one or more mixins to this construct. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.CrewWebhookIngress.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.CrewWebhookIngress.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.CrewWebhookIngress.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.CrewWebhookIngress.isConstruct"></a>
+
+```typescript
+import { CrewWebhookIngress } from '@raindancers/raindancers-crew'
+
+CrewWebhookIngress.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.CrewWebhookIngress.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.property.function">function</a></code> | <code>aws-cdk-lib.aws_lambda.Function</code> | The in-VPC ingress Lambda. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.property.securityGroup">securityGroup</a></code> | <code>aws-cdk-lib.aws_ec2.SecurityGroup</code> | The ingress Lambda's security group (the source of the scoped task ingress rule). |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngress.property.topic">topic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | The SNS topic that fans events into the ingress Lambda. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.CrewWebhookIngress.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `function`<sup>Required</sup> <a name="function" id="@raindancers/raindancers-crew.CrewWebhookIngress.property.function"></a>
+
+```typescript
+public readonly function: Function;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Function
+
+The in-VPC ingress Lambda.
+
+---
+
+##### `securityGroup`<sup>Required</sup> <a name="securityGroup" id="@raindancers/raindancers-crew.CrewWebhookIngress.property.securityGroup"></a>
+
+```typescript
+public readonly securityGroup: SecurityGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SecurityGroup
+
+The ingress Lambda's security group (the source of the scoped task ingress rule).
+
+---
+
+##### `topic`<sup>Required</sup> <a name="topic" id="@raindancers/raindancers-crew.CrewWebhookIngress.property.topic"></a>
+
+```typescript
+public readonly topic: ITopic;
+```
+
+- *Type:* aws-cdk-lib.aws_sns.ITopic
+
+The SNS topic that fans events into the ingress Lambda.
+
+---
+
+
+### EcsCrewHost <a name="EcsCrewHost" id="@raindancers/raindancers-crew.EcsCrewHost"></a>
+
+One self-provisioned EC2 host running the ECS agent, hosting `crewCount` Kiro Crew instances as ECS-on-EC2 container tasks.
+
+The host registers to the {@link FargateCrewBase} cluster and does the NAT
+for the crew tasks itself, so the tasks stay fully private with no public
+IPs and no NAT Gateway, fck-nat, VPC endpoints, or ALB. Each task runs in
+awsvpc mode with its own ENI and private VPC IP; each crew keeps its durable
+`~/.kiro/crew` state on its own encrypted EBS volume that survives instance
+replacement.
+
+Isolation is container-level (shared kernel), accepted as sufficient:
+Graviton Nitro protects the box from other AWS tenants, containers cover
+crew-to-crew separation. See the host-OOM caution: hard per-task memory caps
+bound each crew's ceiling but a busy crew can still pressure siblings when
+the sum of actual usage exceeds physical RAM.
+
+`crewCount` defaults to 1, identical to the single-crew shape, so a plain
+instantiation with no new props gains no extra resources.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.EcsCrewHost.Initializer"></a>
+
+```typescript
+import { EcsCrewHost } from '@raindancers/raindancers-crew'
+
+new EcsCrewHost(scope: Construct, id: string, props: EcsCrewHostProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps">EcsCrewHostProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.EcsCrewHost.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.EcsCrewHostProps">EcsCrewHostProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.with">with</a></code> | Applies one or more mixins to this construct. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.EcsCrewHost.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.EcsCrewHost.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.EcsCrewHost.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.EcsCrewHost.isConstruct"></a>
+
+```typescript
+import { EcsCrewHost } from '@raindancers/raindancers-crew'
+
+EcsCrewHost.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.EcsCrewHost.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.autoScalingGroup">autoScalingGroup</a></code> | <code>aws-cdk-lib.aws_autoscaling.AutoScalingGroup</code> | The size-1 Auto Scaling Group holding the single ECS-registered EC2 host. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.base">base</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCrewBase">FargateCrewBase</a></code> | The shared ECS scaffolding (cluster + egress-only task SG). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.capacityProvider">capacityProvider</a></code> | <code>aws-cdk-lib.aws_ecs.AsgCapacityProvider</code> | The capacity provider registering the host with the cluster. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.crewNames">crewNames</a></code> | <code>string[]</code> | The resolved crew names. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.crews">crews</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCrew">FargateCrew</a>[]</code> | The per-crew scaffolding (roles + log group), one per crew. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.dataVolumes">dataVolumes</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewDataVolume">CrewDataVolume</a>[]</code> | The per-crew durable data volumes (device/label/mount metadata). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.hostSecurityGroup">hostSecurityGroup</a></code> | <code>aws-cdk-lib.aws_ec2.SecurityGroup</code> | The host's SSM-only security group (no inbound). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.region">region</a></code> | <code>string</code> | The region the host runs in (read from the stack env, never a prop). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.role">role</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | The host instance's IAM role (carries the permissions boundary). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.services">services</a></code> | <code>aws-cdk-lib.aws_ecs.Ec2Service[]</code> | The per-crew EC2 services. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.stackTag">stackTag</a></code> | <code>string</code> | The discovery tag value written as `kirocrew:ecs-host`. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.EcsCrewHost.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `autoScalingGroup`<sup>Required</sup> <a name="autoScalingGroup" id="@raindancers/raindancers-crew.EcsCrewHost.property.autoScalingGroup"></a>
+
+```typescript
+public readonly autoScalingGroup: AutoScalingGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_autoscaling.AutoScalingGroup
+
+The size-1 Auto Scaling Group holding the single ECS-registered EC2 host.
+
+---
+
+##### `base`<sup>Required</sup> <a name="base" id="@raindancers/raindancers-crew.EcsCrewHost.property.base"></a>
+
+```typescript
+public readonly base: FargateCrewBase;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCrewBase">FargateCrewBase</a>
+
+The shared ECS scaffolding (cluster + egress-only task SG).
+
+---
+
+##### `capacityProvider`<sup>Required</sup> <a name="capacityProvider" id="@raindancers/raindancers-crew.EcsCrewHost.property.capacityProvider"></a>
+
+```typescript
+public readonly capacityProvider: AsgCapacityProvider;
+```
+
+- *Type:* aws-cdk-lib.aws_ecs.AsgCapacityProvider
+
+The capacity provider registering the host with the cluster.
+
+---
+
+##### `crewNames`<sup>Required</sup> <a name="crewNames" id="@raindancers/raindancers-crew.EcsCrewHost.property.crewNames"></a>
+
+```typescript
+public readonly crewNames: string[];
+```
+
+- *Type:* string[]
+
+The resolved crew names.
+
+---
+
+##### `crews`<sup>Required</sup> <a name="crews" id="@raindancers/raindancers-crew.EcsCrewHost.property.crews"></a>
+
+```typescript
+public readonly crews: FargateCrew[];
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.FargateCrew">FargateCrew</a>[]
+
+The per-crew scaffolding (roles + log group), one per crew.
+
+---
+
+##### `dataVolumes`<sup>Required</sup> <a name="dataVolumes" id="@raindancers/raindancers-crew.EcsCrewHost.property.dataVolumes"></a>
+
+```typescript
+public readonly dataVolumes: CrewDataVolume[];
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewDataVolume">CrewDataVolume</a>[]
+
+The per-crew durable data volumes (device/label/mount metadata).
+
+---
+
+##### `hostSecurityGroup`<sup>Required</sup> <a name="hostSecurityGroup" id="@raindancers/raindancers-crew.EcsCrewHost.property.hostSecurityGroup"></a>
+
+```typescript
+public readonly hostSecurityGroup: SecurityGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SecurityGroup
+
+The host's SSM-only security group (no inbound).
+
+---
+
+##### `region`<sup>Required</sup> <a name="region" id="@raindancers/raindancers-crew.EcsCrewHost.property.region"></a>
+
+```typescript
+public readonly region: string;
+```
+
+- *Type:* string
+
+The region the host runs in (read from the stack env, never a prop).
+
+---
+
+##### `role`<sup>Required</sup> <a name="role" id="@raindancers/raindancers-crew.EcsCrewHost.property.role"></a>
+
+```typescript
+public readonly role: Role;
+```
+
+- *Type:* aws-cdk-lib.aws_iam.Role
+
+The host instance's IAM role (carries the permissions boundary).
+
+---
+
+##### `services`<sup>Required</sup> <a name="services" id="@raindancers/raindancers-crew.EcsCrewHost.property.services"></a>
+
+```typescript
+public readonly services: Ec2Service[];
+```
+
+- *Type:* aws-cdk-lib.aws_ecs.Ec2Service[]
+
+The per-crew EC2 services.
+
+---
+
+##### `stackTag`<sup>Required</sup> <a name="stackTag" id="@raindancers/raindancers-crew.EcsCrewHost.property.stackTag"></a>
+
+```typescript
+public readonly stackTag: string;
+```
+
+- *Type:* string
+
+The discovery tag value written as `kirocrew:ecs-host`.
+
+---
+
+
 ### FargateCrew <a name="FargateCrew" id="@raindancers/raindancers-crew.FargateCrew"></a>
 
 Per-crew Fargate scaffolding for ONE KiroCrew remote crew: the two roles a task carries and the log group it writes to.
@@ -939,6 +1425,82 @@ instance, so the backup must outlive a stack teardown too.
 
 ---
 
+### CrewDataVolume <a name="CrewDataVolume" id="@raindancers/raindancers-crew.CrewDataVolume"></a>
+
+How a per-crew durable EBS volume is exposed to the host and its container.
+
+The device name the construct asks for (for example `/dev/sdf`) is NOT the
+kernel device name on Nitro/Graviton, where every EBS volume surfaces as an
+unpredictable `/dev/nvmeXn1`. The bootstrap therefore resolves each volume by
+a stable filesystem LABEL, never by the device path.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewDataVolume.Initializer"></a>
+
+```typescript
+import { CrewDataVolume } from '@raindancers/raindancers-crew'
+
+const crewDataVolume: CrewDataVolume = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewDataVolume.property.crew">crew</a></code> | <code>string</code> | The crew this volume belongs to. |
+| <code><a href="#@raindancers/raindancers-crew.CrewDataVolume.property.deviceName">deviceName</a></code> | <code>string</code> | The block device name requested at attach time (a hint, not the kernel name). |
+| <code><a href="#@raindancers/raindancers-crew.CrewDataVolume.property.label">label</a></code> | <code>string</code> | The stable filesystem label the bootstrap resolves and mounts by. |
+| <code><a href="#@raindancers/raindancers-crew.CrewDataVolume.property.mountPath">mountPath</a></code> | <code>string</code> | The host mount path the container bind-mounts for `~/.kiro/crew`. |
+
+---
+
+##### `crew`<sup>Required</sup> <a name="crew" id="@raindancers/raindancers-crew.CrewDataVolume.property.crew"></a>
+
+```typescript
+public readonly crew: string;
+```
+
+- *Type:* string
+
+The crew this volume belongs to.
+
+---
+
+##### `deviceName`<sup>Required</sup> <a name="deviceName" id="@raindancers/raindancers-crew.CrewDataVolume.property.deviceName"></a>
+
+```typescript
+public readonly deviceName: string;
+```
+
+- *Type:* string
+
+The block device name requested at attach time (a hint, not the kernel name).
+
+---
+
+##### `label`<sup>Required</sup> <a name="label" id="@raindancers/raindancers-crew.CrewDataVolume.property.label"></a>
+
+```typescript
+public readonly label: string;
+```
+
+- *Type:* string
+
+The stable filesystem label the bootstrap resolves and mounts by.
+
+---
+
+##### `mountPath`<sup>Required</sup> <a name="mountPath" id="@raindancers/raindancers-crew.CrewDataVolume.property.mountPath"></a>
+
+```typescript
+public readonly mountPath: string;
+```
+
+- *Type:* string
+
+The host mount path the container bind-mounts for `~/.kiro/crew`.
+
+---
+
 ### CrewRuntime <a name="CrewRuntime" id="@raindancers/raindancers-crew.CrewRuntime"></a>
 
 Always-on runtime settings for the hosted crew, threaded into the crew `config.json` at boot. All fields are optional and default to the current gateway behaviour; omitting {@link RemoteCrewInstanceProps.crewRuntime} entirely reproduces today's `kirocrew setup --agent-only` + `kirocrew gateway` exactly.
@@ -1081,6 +1643,577 @@ S3 key of the source tarball within {@link sourceBucket}.
 
 Required when
 `sourceBucket` is set; ignored otherwise.
+
+---
+
+### CrewWebhookIngressProps <a name="CrewWebhookIngressProps" id="@raindancers/raindancers-crew.CrewWebhookIngressProps"></a>
+
+Properties for {@link CrewWebhookIngress}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.Initializer"></a>
+
+```typescript
+import { CrewWebhookIngressProps } from '@raindancers/raindancers-crew'
+
+const crewWebhookIngressProps: CrewWebhookIngressProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.code">code</a></code> | <code>aws-cdk-lib.aws_lambda.Code</code> | The code the ingress Lambda runs. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.host">host</a></code> | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost">EcsCrewHost</a></code> | The crew host whose tasks receive webhooks. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.permissionsBoundaryArn">permissionsBoundaryArn</a></code> | <code>string</code> | ARN of an IAM permissions boundary applied to the Lambda's execution role. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.vpc">vpc</a></code> | <code>aws-cdk-lib.aws_ec2.IVpc</code> | VPC to place the ingress Lambda in. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.architecture">architecture</a></code> | <code>aws-cdk-lib.aws_lambda.Architecture</code> | Lambda architecture. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.crewPort">crewPort</a></code> | <code>number</code> | TCP port on the crew task the Lambda reaches (the gateway/webhook port). |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.handler">handler</a></code> | <code>string</code> | The Lambda handler entry point. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.runtime">runtime</a></code> | <code>aws-cdk-lib.aws_lambda.Runtime</code> | The Lambda runtime. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.timeout">timeout</a></code> | <code>aws-cdk-lib.Duration</code> | Lambda timeout. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.topic">topic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | An existing SNS topic to subscribe the Lambda to. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWebhookIngressProps.property.vpcSubnets">vpcSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnets to place the ingress Lambda's ENIs in. |
+
+---
+
+##### `code`<sup>Required</sup> <a name="code" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.code"></a>
+
+```typescript
+public readonly code: Code;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Code
+
+The code the ingress Lambda runs.
+
+The consumer supplies it: this construct
+wires the plumbing (SNS -> in-VPC Lambda -> task private IP) but does not
+ship an opinion about how a webhook payload maps to a crew.
+
+---
+
+##### `host`<sup>Required</sup> <a name="host" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.host"></a>
+
+```typescript
+public readonly host: EcsCrewHost;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.EcsCrewHost">EcsCrewHost</a>
+
+The crew host whose tasks receive webhooks.
+
+The task security group is
+granted a scoped inbound rule from this ingress Lambda's SG on the crew
+port only — the one controlled inbound exception to the egress-only model.
+
+---
+
+##### `permissionsBoundaryArn`<sup>Required</sup> <a name="permissionsBoundaryArn" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.permissionsBoundaryArn"></a>
+
+```typescript
+public readonly permissionsBoundaryArn: string;
+```
+
+- *Type:* string
+
+ARN of an IAM permissions boundary applied to the Lambda's execution role.
+
+The ingress Lambda runs consumer-triggered code, so it carries a boundary
+matching the rest of the construct.
+
+---
+
+##### `vpc`<sup>Required</sup> <a name="vpc" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.vpc"></a>
+
+```typescript
+public readonly vpc: IVpc;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.IVpc
+
+VPC to place the ingress Lambda in.
+
+Must be the same VPC as the crew tasks
+so the Lambda can reach a task's private ENI IP directly with NO VPC
+endpoint.
+
+---
+
+##### `architecture`<sup>Optional</sup> <a name="architecture" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.architecture"></a>
+
+```typescript
+public readonly architecture: Architecture;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Architecture
+- *Default:* lambda.Architecture.ARM_64
+
+Lambda architecture.
+
+Defaults to arm64 to match the Graviton host.
+
+---
+
+##### `crewPort`<sup>Optional</sup> <a name="crewPort" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.crewPort"></a>
+
+```typescript
+public readonly crewPort: number;
+```
+
+- *Type:* number
+- *Default:* 5476
+
+TCP port on the crew task the Lambda reaches (the gateway/webhook port).
+
+---
+
+##### `handler`<sup>Optional</sup> <a name="handler" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.handler"></a>
+
+```typescript
+public readonly handler: string;
+```
+
+- *Type:* string
+- *Default:* 'index.handler'
+
+The Lambda handler entry point.
+
+---
+
+##### `runtime`<sup>Optional</sup> <a name="runtime" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.runtime"></a>
+
+```typescript
+public readonly runtime: Runtime;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Runtime
+- *Default:* lambda.Runtime.NODEJS_20_X
+
+The Lambda runtime.
+
+Must be an arm64-compatible runtime to match the
+arm64 default host.
+
+---
+
+##### `timeout`<sup>Optional</sup> <a name="timeout" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.timeout"></a>
+
+```typescript
+public readonly timeout: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.seconds(30)
+
+Lambda timeout.
+
+---
+
+##### `topic`<sup>Optional</sup> <a name="topic" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.topic"></a>
+
+```typescript
+public readonly topic: ITopic;
+```
+
+- *Type:* aws-cdk-lib.aws_sns.ITopic
+- *Default:* a new topic is created
+
+An existing SNS topic to subscribe the Lambda to.
+
+Omit to create one.
+
+---
+
+##### `vpcSubnets`<sup>Optional</sup> <a name="vpcSubnets" id="@raindancers/raindancers-crew.CrewWebhookIngressProps.property.vpcSubnets"></a>
+
+```typescript
+public readonly vpcSubnets: SubnetSelection;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SubnetSelection
+- *Default:* the VPC's private-with-egress subnets
+
+Subnets to place the ingress Lambda's ENIs in.
+
+Should be the same private
+subnet the crew tasks run in so the Lambda reaches task IPs directly.
+
+---
+
+### EcsCrewHostProps <a name="EcsCrewHostProps" id="@raindancers/raindancers-crew.EcsCrewHostProps"></a>
+
+Properties for {@link EcsCrewHost}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.EcsCrewHostProps.Initializer"></a>
+
+```typescript
+import { EcsCrewHostProps } from '@raindancers/raindancers-crew'
+
+const ecsCrewHostProps: EcsCrewHostProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.permissionsBoundaryArn">permissionsBoundaryArn</a></code> | <code>string</code> | ARN of an IAM permissions boundary applied to the host instance role. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.vpc">vpc</a></code> | <code>aws-cdk-lib.aws_ec2.IVpc</code> | VPC to run in. Passed in, never created here. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.architecture">architecture</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewArchitecture">CrewArchitecture</a></code> | CPU architecture of the host and the crew container images. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.backupBucket">backupBucket</a></code> | <code><a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a></code> | An S3 backup bucket. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewCount">crewCount</a></code> | <code>number</code> | Number of Kiro Crew instances to host, each one ECS task/service. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewCpuShares">crewCpuShares</a></code> | <code>number</code> | Optional SOFT CPU shares per crew container (1024 = one vCPU). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewDataVolumeSizeGb">crewDataVolumeSizeGb</a></code> | <code>number</code> | Per-crew durable EBS data volume size in GiB. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewDataVolumeType">crewDataVolumeType</a></code> | <code>aws-cdk-lib.aws_ec2.EbsDeviceVolumeType</code> | Per-crew EBS volume type. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewImage">crewImage</a></code> | <code>string</code> | Container image reference for the crew task. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewMemoryHardLimitMiB">crewMemoryHardLimitMiB</a></code> | <code>number</code> | HARD memory cap (MiB) per crew container. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewMemoryReservationMiB">crewMemoryReservationMiB</a></code> | <code>number</code> | SOFT memory reservation (MiB) per crew container. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crewPermissionsBoundaryArn">crewPermissionsBoundaryArn</a></code> | <code>string</code> | ARN of the pre-created shared crew permissions boundary (`arn:aws:iam::<account>:policy/kirocrew-crew-boundary`), applied to every per-crew task and execution role. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.crews">crews</a></code> | <code>string[]</code> | Explicit crew names. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.ecrRepositoryArn">ecrRepositoryArn</a></code> | <code>string</code> | ARN of the private ECR repository holding the crew image. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.hostSubnets">hostSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnet selection for the host ENI. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.instanceType">instanceType</a></code> | <code>aws-cdk-lib.aws_ec2.InstanceType</code> | EC2 instance type for the single ECS-registered host. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.logRetentionDays">logRetentionDays</a></code> | <code>number</code> | Days a crew's task logs are kept. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.rootVolumeSizeGb">rootVolumeSizeGb</a></code> | <code>number</code> | gp3 root volume size in GiB for the host. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.stackTag">stackTag</a></code> | <code>string</code> | Discovery tag value written as `kirocrew:ecs-host`. |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHostProps.property.taskSubnets">taskSubnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnet selection for the crew task ENIs. |
+
+---
+
+##### `permissionsBoundaryArn`<sup>Required</sup> <a name="permissionsBoundaryArn" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.permissionsBoundaryArn"></a>
+
+```typescript
+public readonly permissionsBoundaryArn: string;
+```
+
+- *Type:* string
+
+ARN of an IAM permissions boundary applied to the host instance role.
+
+The host runs a prompt-injectable agent per crew, so its role MUST carry a
+boundary that caps blast radius. Required, not optional, matching
+{@link RemoteCrewInstanceProps.permissionsBoundaryArn }. Any valid managed-
+policy ARN is accepted here (this is the EC2/host boundary).
+
+The per-crew task/execution roles take {@link crewPermissionsBoundaryArn},
+which is validated separately against the `kirocrew-crew-boundary` pattern
+the crew roles require.
+
+---
+
+##### `vpc`<sup>Required</sup> <a name="vpc" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.vpc"></a>
+
+```typescript
+public readonly vpc: IVpc;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.IVpc
+
+VPC to run in. Passed in, never created here.
+
+The construct consumes a two-subnet host-NAT topology it does not build:
+one PUBLIC subnet (host ENI + Elastic IP + IGW route) and one PRIVATE
+subnet (task ENIs, `0.0.0.0/0` -> the host ENI, no IGW route). Select them
+with {@link hostSubnets} and {@link taskSubnets}.
+
+---
+
+##### `architecture`<sup>Optional</sup> <a name="architecture" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.architecture"></a>
+
+```typescript
+public readonly architecture: CrewArchitecture;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewArchitecture">CrewArchitecture</a>
+- *Default:* CrewArchitecture.ARM64
+
+CPU architecture of the host and the crew container images.
+
+Must match
+{@link instanceType} when that is set.
+
+---
+
+##### `backupBucket`<sup>Optional</sup> <a name="backupBucket" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.backupBucket"></a>
+
+```typescript
+public readonly backupBucket: ICrewBackupBucket;
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.ICrewBackupBucket">ICrewBackupBucket</a>
+- *Default:* no off-box backup
+
+An S3 backup bucket.
+
+When set, each per-crew TASK role is granted write so
+the running container pushes its own snapshots off-box.
+
+---
+
+##### `crewCount`<sup>Optional</sup> <a name="crewCount" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewCount"></a>
+
+```typescript
+public readonly crewCount: number;
+```
+
+- *Type:* number
+- *Default:* 1
+
+Number of Kiro Crew instances to host, each one ECS task/service.
+
+DEFAULT 1 — identical to today's single-crew behaviour, so existing
+consumers gain nothing new. The 55minutes consumer passes 3. Validated
+1..8: awsvpc gives each task its own ENI, and (crewCount + 1) ENIs (the
+host ENI plus one per task) must fit the instance type's ENI budget.
+
+---
+
+##### `crewCpuShares`<sup>Optional</sup> <a name="crewCpuShares" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewCpuShares"></a>
+
+```typescript
+public readonly crewCpuShares: number;
+```
+
+- *Type:* number
+- *Default:* unset (shared CPU)
+
+Optional SOFT CPU shares per crew container (1024 = one vCPU).
+
+Omit to
+leave CPU unconstrained (crews share the host CPU fairly under contention).
+
+---
+
+##### `crewDataVolumeSizeGb`<sup>Optional</sup> <a name="crewDataVolumeSizeGb" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewDataVolumeSizeGb"></a>
+
+```typescript
+public readonly crewDataVolumeSizeGb: number;
+```
+
+- *Type:* number
+- *Default:* 20
+
+Per-crew durable EBS data volume size in GiB.
+
+Always encrypted, always
+`deleteOnTermination: false` (a crew's `~/.kiro/crew` learnings must
+outlive an instance replacement, matching the CrewBackupBucket RETAIN
+intent).
+
+---
+
+##### `crewDataVolumeType`<sup>Optional</sup> <a name="crewDataVolumeType" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewDataVolumeType"></a>
+
+```typescript
+public readonly crewDataVolumeType: EbsDeviceVolumeType;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.EbsDeviceVolumeType
+- *Default:* ec2.EbsDeviceVolumeType.GP3
+
+Per-crew EBS volume type.
+
+---
+
+##### `crewImage`<sup>Optional</sup> <a name="crewImage" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewImage"></a>
+
+```typescript
+public readonly crewImage: string;
+```
+
+- *Type:* string
+- *Default:* 'public.ecr.aws/kirocrew/crew:latest'
+
+Container image reference for the crew task.
+
+When {@link ecrRepositoryArn}
+is set this is typically the repo URI with a tag; otherwise a public
+registry reference.
+
+---
+
+##### `crewMemoryHardLimitMiB`<sup>Optional</sup> <a name="crewMemoryHardLimitMiB" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewMemoryHardLimitMiB"></a>
+
+```typescript
+public readonly crewMemoryHardLimitMiB: number;
+```
+
+- *Type:* number
+- *Default:* 2048
+
+HARD memory cap (MiB) per crew container.
+
+A crew is OOM-killed at this
+ceiling, so no single crew can consume the whole host. Set the SUM of hard
+caps at or below (physical RAM minus host + ECS-agent headroom) for a hard
+cross-crew guarantee — see the host-OOM caution in the README.
+
+---
+
+##### `crewMemoryReservationMiB`<sup>Optional</sup> <a name="crewMemoryReservationMiB" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewMemoryReservationMiB"></a>
+
+```typescript
+public readonly crewMemoryReservationMiB: number;
+```
+
+- *Type:* number
+- *Default:* 1024
+
+SOFT memory reservation (MiB) per crew container.
+
+ECS uses it for
+placement; a crew may burst above it when the host has spare RAM, so idle
+crews cost little.
+
+---
+
+##### `crewPermissionsBoundaryArn`<sup>Optional</sup> <a name="crewPermissionsBoundaryArn" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crewPermissionsBoundaryArn"></a>
+
+```typescript
+public readonly crewPermissionsBoundaryArn: string;
+```
+
+- *Type:* string
+- *Default:* no crew boundary (declared degraded mode; see FargateCrew)
+
+ARN of the pre-created shared crew permissions boundary (`arn:aws:iam::<account>:policy/kirocrew-crew-boundary`), applied to every per-crew task and execution role.
+
+Separate from {@link permissionsBoundaryArn} because the crew roles enforce
+the `kirocrew-crew-boundary` policy name (a different boundary from the
+host's), and validating them together would force one ARN to satisfy two
+distinct patterns. Optional, mirroring {@link FargateCrew}'s declared
+degraded mode: omit it only when no crew-boundary creator exists yet.
+
+---
+
+##### `crews`<sup>Optional</sup> <a name="crews" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.crews"></a>
+
+```typescript
+public readonly crews: string[];
+```
+
+- *Type:* string[]
+- *Default:* crew-1 .. crew-<crewCount>
+
+Explicit crew names.
+
+Each must match the {@link FargateCrew} regex
+`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`; the log group, roles, and secret
+namespace are derived from it. When omitted, names are generated as
+`crew-1`..`crew-<crewCount>`. When set, the list length must equal
+{@link crewCount}.
+
+---
+
+##### `ecrRepositoryArn`<sup>Optional</sup> <a name="ecrRepositoryArn" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.ecrRepositoryArn"></a>
+
+```typescript
+public readonly ecrRepositoryArn: string;
+```
+
+- *Type:* string
+- *Default:* public registry; no pull grant
+
+ARN of the private ECR repository holding the crew image.
+
+Leave unset when
+the image is pulled from a public registry. When set, each per-crew
+execution role gets a pull grant scoped to this one repository.
+
+---
+
+##### `hostSubnets`<sup>Optional</sup> <a name="hostSubnets" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.hostSubnets"></a>
+
+```typescript
+public readonly hostSubnets: SubnetSelection;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SubnetSelection
+- *Default:* one public subnet in the VPC
+
+Subnet selection for the host ENI.
+
+This is the PUBLIC subnet (IGW-routed,
+carries the Elastic IP), because the host does the NAT for the tasks.
+
+---
+
+##### `instanceType`<sup>Optional</sup> <a name="instanceType" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.instanceType"></a>
+
+```typescript
+public readonly instanceType: InstanceType;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.InstanceType
+- *Default:* m7g.2xlarge (arm64) / m7i.2xlarge (x86_64), matching RemoteCrewInstance
+
+EC2 instance type for the single ECS-registered host.
+
+The type STAYS a settable prop: the 55minutes consumer passes
+`new ec2.InstanceType('m9g.xlarge')`. Never hardcoded to one family.
+
+---
+
+##### `logRetentionDays`<sup>Optional</sup> <a name="logRetentionDays" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.logRetentionDays"></a>
+
+```typescript
+public readonly logRetentionDays: number;
+```
+
+- *Type:* number
+- *Default:* 30
+
+Days a crew's task logs are kept.
+
+One of the CloudWatch retention values
+(see {@link FargateCrew}).
+
+---
+
+##### `rootVolumeSizeGb`<sup>Optional</sup> <a name="rootVolumeSizeGb" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.rootVolumeSizeGb"></a>
+
+```typescript
+public readonly rootVolumeSizeGb: number;
+```
+
+- *Type:* number
+- *Default:* 60
+
+gp3 root volume size in GiB for the host.
+
+Always encrypted.
+
+---
+
+##### `stackTag`<sup>Optional</sup> <a name="stackTag" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.stackTag"></a>
+
+```typescript
+public readonly stackTag: string;
+```
+
+- *Type:* string
+- *Default:* 'kirocrew'
+
+Discovery tag value written as `kirocrew:ecs-host`.
+
+Must match
+`[a-zA-Z0-9-]{1,51}`. The cluster is named `kirocrew-crew-<stackTag>`.
+
+---
+
+##### `taskSubnets`<sup>Optional</sup> <a name="taskSubnets" id="@raindancers/raindancers-crew.EcsCrewHostProps.property.taskSubnets"></a>
+
+```typescript
+public readonly taskSubnets: SubnetSelection;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.SubnetSelection
+- *Default:* the VPC's private-with-egress subnets
+
+Subnet selection for the crew task ENIs.
+
+This is the PRIVATE subnet whose
+`0.0.0.0/0` route points at the host ENI (no IGW route). Tasks get no
+public IP.
 
 ---
 
