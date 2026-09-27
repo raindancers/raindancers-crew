@@ -29,7 +29,13 @@ describe('EcsCrewHost - defaults (additive guard)', () => {
     // One task definition, one service, one crew log group.
     expect(Object.keys(t.findResources('AWS::ECS::TaskDefinition'))).toHaveLength(1);
     expect(Object.keys(t.findResources('AWS::ECS::Service'))).toHaveLength(1);
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/crew-1' });
+    const groups = t.findResources('AWS::Logs::LogGroup');
+    expect(Object.keys(groups)).toHaveLength(1);
+    // Auto-named (no fixed literal) so a rolled-back deploy cannot orphan it.
+    for (const g of Object.values(groups)) {
+      expect(g.Properties.LogGroupName).toBeUndefined();
+      expect(g.DeletionPolicy).toBe('Delete');
+    }
   });
 
   test('creates exactly one ECS cluster named from the tag', () => {
@@ -103,9 +109,14 @@ describe('EcsCrewHost - crewCount fan-out', () => {
     const t = tpl({ crewCount: 3 });
     expect(Object.keys(t.findResources('AWS::ECS::TaskDefinition'))).toHaveLength(3);
     expect(Object.keys(t.findResources('AWS::ECS::Service'))).toHaveLength(3);
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/crew-1' });
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/crew-2' });
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/crew-3' });
+    const groups = t.findResources('AWS::Logs::LogGroup');
+    expect(Object.keys(groups)).toHaveLength(3);
+    // Three distinct auto-named groups (no fixed /kirocrew/crew/crew-N literals
+    // that a rolled-back deploy could orphan and then collide with).
+    for (const g of Object.values(groups)) {
+      expect(g.Properties.LogGroupName).toBeUndefined();
+      expect(g.DeletionPolicy).toBe('Delete');
+    }
   });
 
   test('each service desiredCount is 1', () => {
@@ -115,10 +126,12 @@ describe('EcsCrewHost - crewCount fan-out', () => {
     }
   });
 
-  test('explicit crew names are honoured and derive the log groups', () => {
+  test('explicit crew names are honoured and derive the resource names', () => {
     const t = tpl({ crewCount: 2, crews: ['alpha', 'beta'] });
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/alpha' });
-    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/kirocrew/crew/beta' });
+    // Log groups are auto-named now, so prove propagation via the role names,
+    // which are still derived from the crew name.
+    t.hasResourceProperties('AWS::IAM::Role', { RoleName: 'kirocrew-crew-alpha-exec' });
+    t.hasResourceProperties('AWS::IAM::Role', { RoleName: 'kirocrew-crew-beta-exec' });
   });
 
   test('rejects crewCount above the ENI-budget max', () => {

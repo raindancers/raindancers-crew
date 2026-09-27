@@ -401,7 +401,7 @@ sequenceDiagram
 For a container-based crew there are two sibling constructs, mirroring the upstream `kirocrew-fargate-base` + `kirocrew-fargate-crew` split:
 
 - **`FargateCrewBase`** — one per account/region: the ECS cluster crew tasks run on plus an egress-only (no-inbound) task security group. Deleting a crew must not delete the shared cluster, so this is separate.
-- **`FargateCrew`** — one per crew: the execution role (secret read scoped to `kirocrew/crew/<crew>/*`, log write, optional private-ECR pull), the **zero-policy task role** (the running container's blast radius — it must never gain `secretsmanager:GetSecretValue`), and the crew's log group. All names are derived from the crew name.
+- **`FargateCrew`** — one per crew: the execution role (secret read scoped to `kirocrew/crew/<crew>/*`, log write, optional private-ECR pull), the **zero-policy task role** (the running container's blast radius — it must never gain `secretsmanager:GetSecretValue`), and the crew's log group (auto-named; read `crew.logGroup.logGroupName`). The role names are derived from the crew name.
 
 ```ts
 import { FargateCrewBase, FargateCrew } from '@raindancers/raindancers-crew';
@@ -446,7 +446,7 @@ What it creates:
 |---|---|
 | ECS cluster + egress-only task SG | Reused from `FargateCrewBase` (one per account/region) |
 | Size-1 Auto Scaling Group + capacity provider | ONE self-provisioned host, arch-aware ECS-optimized AL2023 AMI, **IMDSv2 enforced**, **encrypted gp3** root. A size-1 ASG is still one EC2 host; the capacity provider is what registers it with the cluster so the L2 `Ec2Service` can schedule onto it |
-| Per-crew EC2 task definition + service | `awsvpc` network mode (each task its own ENI + private IP), `desiredCount: 1`, egress-only task SG, **no public IP**. Reuses each crew's `FargateCrew` task/execution role and `/kirocrew/crew/<crew>` log group |
+| Per-crew EC2 task definition + service | `awsvpc` network mode (each task its own ENI + private IP), `desiredCount: 1`, egress-only task SG, **no public IP**. Reuses each crew's `FargateCrew` task/execution role and its auto-named log group (read `crew.logGroup.logGroupName` for the resolved name) |
 | Per-crew durable EBS | one encrypted **gp3** volume per crew, **`deleteOnTermination: false`** so a crew's `~/.kiro/crew` outlives an instance replacement. Resolved in the bootstrap by a stable filesystem **label**, never `/dev/sdf` (the Nitro NVMe layer renames it) |
 | Host role grant | scoped `ec2:ModifyInstanceAttribute` (tag-conditioned to KiroCrew ECS hosts) so the host disables its own source/dest check for NAT |
 

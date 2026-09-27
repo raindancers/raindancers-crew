@@ -53,10 +53,23 @@ describe('FargateCrewBase', () => {
 });
 
 describe('FargateCrew', () => {
-  test('creates the derived log group', () => {
-    crewTemplate().hasResourceProperties('AWS::Logs::LogGroup', {
-      LogGroupName: '/kirocrew/crew/fiftyfive',
-    });
+  test('log group is auto-named (no fixed LogGroupName) and DESTROY-on-removal', () => {
+    const t = crewTemplate();
+    // A fixed literal name can orphan on a rolled-back deploy and then block
+    // every future deploy with "already exists"; the group must be auto-named.
+    const groups = t.findResources('AWS::Logs::LogGroup');
+    const values = Object.values(groups);
+    expect(values).toHaveLength(1);
+    expect(values[0].Properties.LogGroupName).toBeUndefined();
+    // A rollback must delete the group, not orphan it.
+    expect(values[0].DeletionPolicy).toBe('Delete');
+  });
+
+  test('honours an explicit logGroupName when a caller pins one', () => {
+    crewTemplate({ logGroupName: '/kirocrew/crew/fiftyfive' }).hasResourceProperties(
+      'AWS::Logs::LogGroup',
+      { LogGroupName: '/kirocrew/crew/fiftyfive' },
+    );
   });
 
   test('execution and task roles carry derived names', () => {
