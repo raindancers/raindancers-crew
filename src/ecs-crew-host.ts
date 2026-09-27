@@ -261,6 +261,8 @@ export class EcsCrewHost extends Construct {
   public readonly base: FargateCrewBase;
   /** The size-1 Auto Scaling Group holding the single ECS-registered EC2 host. */
   public readonly autoScalingGroup: autoscaling.AutoScalingGroup;
+  /** The EC2 launch template the host ASG is built from (never a launch configuration). */
+  public readonly launchTemplate: ec2.LaunchTemplate;
   /** The capacity provider registering the host with the cluster. */
   public readonly capacityProvider: ecs.AsgCapacityProvider;
   /** The host instance's IAM role (carries the permissions boundary). */
@@ -387,22 +389,21 @@ export class EcsCrewHost extends Construct {
       mountPath: `/var/lib/kirocrew/${crew}`,
     }));
 
-    // The ASG uses the autoscaling module's own BlockDevice types (distinct
-    // from ec2's). The public crewDataVolumeType prop stays ec2-typed for
-    // library consistency; translate it by its shared string value here.
-    const asgVolumeType = volumeType as unknown as autoscaling.EbsDeviceVolumeType;
-    const rootBlockDevice: autoscaling.BlockDevice = {
+    // The launch template uses the ec2 module's BlockDevice types, so the
+    // public ec2-typed crewDataVolumeType prop is used directly, no cross-module
+    // translation needed.
+    const rootBlockDevice: ec2.BlockDevice = {
       deviceName: '/dev/xvda',
-      volume: autoscaling.BlockDeviceVolume.ebs(props.rootVolumeSizeGb ?? DEFAULT_ROOT_VOLUME_GB, {
-        volumeType: autoscaling.EbsDeviceVolumeType.GP3,
+      volume: ec2.BlockDeviceVolume.ebs(props.rootVolumeSizeGb ?? DEFAULT_ROOT_VOLUME_GB, {
+        volumeType: ec2.EbsDeviceVolumeType.GP3,
         encrypted: true,
         deleteOnTermination: true,
       }),
     };
-    const crewBlockDevices: autoscaling.BlockDevice[] = this.dataVolumes.map((v) => ({
+    const crewBlockDevices: ec2.BlockDevice[] = this.dataVolumes.map((v) => ({
       deviceName: v.deviceName,
-      volume: autoscaling.BlockDeviceVolume.ebs(volumeSize, {
-        volumeType: asgVolumeType,
+      volume: ec2.BlockDeviceVolume.ebs(volumeSize, {
+        volumeType,
         encrypted: true,
         // The whole point: a crew's memory outlives an instance replacement.
         deleteOnTermination: false,
@@ -432,22 +433,39 @@ export class EcsCrewHost extends Construct {
     // Ec2Services below can schedule onto it. IMDSv2 enforced (a
     // prompt-injectable agent must not read role creds via IMDSv1), encrypted
     // gp3 root, plus the per-crew durable data volumes.
-    this.autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'HostAsg', {
-      vpc: props.vpc,
-      vpcSubnets: props.hostSubnets ?? { subnetType: ec2.SubnetType.PUBLIC },
+    //
+    // The ASG is built from an explicit EC2 LAUNCH TEMPLATE, not a launch
+    // configuration. AWS retired EC2 Launch Configurations for accounts created
+    // after ~June 2023 ("The Launch Configuration creation operation is not
+    // available in your account. Use launch templates ..."), so an ASG that
+    // renders AWS::AutoScaling::LaunchConfiguration fails at CREATE. The L2
+    // AutoScalingGroup only emits a launch template automatically when the
+    // consumer has set the @aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig
+    // feature flag; passing an explicit launchTemplate makes the construct emit
+    // AWS::EC2::LaunchTemplate for EVERY consumer, independent of their cdk.json.
+    const launchTemplate = new ec2.LaunchTemplate(this, 'HostLaunchTemplate', {
       instanceType,
       machineImage,
       role: this.role,
       securityGroup: this.hostSecurityGroup,
       userData,
+      // IMDSv2 enforced: a prompt-injectable agent must not read role creds via
+      // IMDSv1.
       requireImdsv2: true,
-      minCapacity: 1,
-      maxCapacity: 1,
-      desiredCapacity: 1,
       // The host is in the PUBLIC subnet and carries the public IP so it
       // egresses via the IGW and can NAT the tasks. Tasks get none.
       associatePublicIpAddress: true,
       blockDevices: [rootBlockDevice, ...crewBlockDevices],
+    });
+    this.launchTemplate = launchTemplate;
+
+    this.autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'HostAsg', {
+      vpc: props.vpc,
+      vpcSubnets: props.hostSubnets ?? { subnetType: ec2.SubnetType.PUBLIC },
+      launchTemplate,
+      minCapacity: 1,
+      maxCapacity: 1,
+      desiredCapacity: 1,
     });
     Tags.of(this.autoScalingGroup).add('Name', `kirocrew-ecs-host-${stackTag}`);
 

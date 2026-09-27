@@ -48,9 +48,21 @@ describe('EcsCrewHost - defaults (additive guard)', () => {
       MinSize: '1',
       MaxSize: '1',
     });
-    t.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-      MetadataOptions: Match.objectLike({ HttpTokens: 'required' }),
+    // The host is built from a launch TEMPLATE, never a launch configuration
+    // (AWS retired launch configurations for accounts created after ~June 2023).
+    t.resourceCountIs('AWS::AutoScaling::LaunchConfiguration', 0);
+    t.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+      LaunchTemplateData: Match.objectLike({
+        MetadataOptions: Match.objectLike({ HttpTokens: 'required' }),
+      }),
     });
+  });
+
+  test('the ASG references the launch template, not a launch configuration', () => {
+    const t = tpl();
+    const asg = Object.values(t.findResources('AWS::AutoScaling::AutoScalingGroup'))[0];
+    expect(asg.Properties.LaunchTemplate).toBeDefined();
+    expect(asg.Properties.LaunchConfigurationName).toBeUndefined();
   });
 
   test('the host disables source/dest check itself (scoped IAM grant present)', () => {
@@ -73,15 +85,15 @@ describe('EcsCrewHost - defaults (additive guard)', () => {
   });
 
   test('instance type stays a settable prop (default m7g.2xlarge on arm64)', () => {
-    tpl().hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-      InstanceType: 'm7g.2xlarge',
+    tpl().hasResourceProperties('AWS::EC2::LaunchTemplate', {
+      LaunchTemplateData: Match.objectLike({ InstanceType: 'm7g.2xlarge' }),
     });
   });
 
   test('consumer can pass m9g.xlarge (type is not hardcoded)', () => {
     tpl({ instanceType: new ec2.InstanceType('m9g.xlarge') }).hasResourceProperties(
-      'AWS::AutoScaling::LaunchConfiguration',
-      { InstanceType: 'm9g.xlarge' },
+      'AWS::EC2::LaunchTemplate',
+      { LaunchTemplateData: Match.objectLike({ InstanceType: 'm9g.xlarge' }) },
     );
   });
 });
@@ -174,14 +186,14 @@ describe('EcsCrewHost - awsvpc networking + two-subnet wiring', () => {
 });
 
 describe('EcsCrewHost - per-crew durable EBS', () => {
-  function launchConfigData(t: Template) {
-    const lcs = t.findResources('AWS::AutoScaling::LaunchConfiguration');
-    return (Object.values(lcs)[0].Properties) as any;
+  function launchTemplateData(t: Template) {
+    const lts = t.findResources('AWS::EC2::LaunchTemplate');
+    return (Object.values(lts)[0].Properties.LaunchTemplateData) as any;
   }
 
   test('each crew gets an encrypted gp3 data volume with deleteOnTermination false', () => {
     const t = tpl({ crewCount: 2 });
-    const mappings = launchConfigData(t).BlockDeviceMappings as any[];
+    const mappings = launchTemplateData(t).BlockDeviceMappings as any[];
     const dataDevices = mappings.filter((m) => m.DeviceName !== '/dev/xvda');
     expect(dataDevices).toHaveLength(2);
     for (const d of dataDevices) {
@@ -193,7 +205,7 @@ describe('EcsCrewHost - per-crew durable EBS', () => {
 
   test('the root volume is encrypted gp3 and DOES delete on termination', () => {
     const t = tpl();
-    const mappings = launchConfigData(t).BlockDeviceMappings as any[];
+    const mappings = launchTemplateData(t).BlockDeviceMappings as any[];
     const root = mappings.find((m) => m.DeviceName === '/dev/xvda');
     expect(root.Ebs.Encrypted).toBe(true);
     expect(root.Ebs.VolumeType).toBe('gp3');

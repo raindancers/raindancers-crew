@@ -545,6 +545,7 @@ Any object.
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.crews">crews</a></code> | <code><a href="#@raindancers/raindancers-crew.FargateCrew">FargateCrew</a>[]</code> | The per-crew scaffolding (roles + log group), one per crew. |
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.dataVolumes">dataVolumes</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewDataVolume">CrewDataVolume</a>[]</code> | The per-crew durable data volumes (device/label/mount metadata). |
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.hostSecurityGroup">hostSecurityGroup</a></code> | <code>aws-cdk-lib.aws_ec2.SecurityGroup</code> | The host's SSM-only security group (no inbound). |
+| <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.launchTemplate">launchTemplate</a></code> | <code>aws-cdk-lib.aws_ec2.LaunchTemplate</code> | The EC2 launch template the host ASG is built from (never a launch configuration). |
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.region">region</a></code> | <code>string</code> | The region the host runs in (read from the stack env, never a prop). |
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.role">role</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | The host instance's IAM role (carries the permissions boundary). |
 | <code><a href="#@raindancers/raindancers-crew.EcsCrewHost.property.services">services</a></code> | <code>aws-cdk-lib.aws_ecs.Ec2Service[]</code> | The per-crew EC2 services. |
@@ -645,6 +646,18 @@ public readonly hostSecurityGroup: SecurityGroup;
 - *Type:* aws-cdk-lib.aws_ec2.SecurityGroup
 
 The host's SSM-only security group (no inbound).
+
+---
+
+##### `launchTemplate`<sup>Required</sup> <a name="launchTemplate" id="@raindancers/raindancers-crew.EcsCrewHost.property.launchTemplate"></a>
+
+```typescript
+public readonly launchTemplate: LaunchTemplate;
+```
+
+- *Type:* aws-cdk-lib.aws_ec2.LaunchTemplate
+
+The EC2 launch template the host ASG is built from (never a launch configuration).
 
 ---
 
