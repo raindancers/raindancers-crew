@@ -31,10 +31,12 @@ describe('EcsCrewHost - defaults (additive guard)', () => {
     expect(Object.keys(t.findResources('AWS::ECS::Service'))).toHaveLength(1);
     const groups = t.findResources('AWS::Logs::LogGroup');
     expect(Object.keys(groups)).toHaveLength(1);
-    // Auto-named (no fixed literal) so a rolled-back deploy cannot orphan it.
+    // Auto-named (no fixed literal) so a rolled-back deploy cannot orphan it,
+    // and RetainExceptOnCreate so an SCP denying logs:DeleteLogGroup cannot
+    // wedge the stack on an update/delete rollback.
     for (const g of Object.values(groups)) {
       expect(g.Properties.LogGroupName).toBeUndefined();
-      expect(g.DeletionPolicy).toBe('Delete');
+      expect(g.DeletionPolicy).toBe('RetainExceptOnCreate');
     }
   });
 
@@ -112,10 +114,12 @@ describe('EcsCrewHost - crewCount fan-out', () => {
     const groups = t.findResources('AWS::Logs::LogGroup');
     expect(Object.keys(groups)).toHaveLength(3);
     // Three distinct auto-named groups (no fixed /kirocrew/crew/crew-N literals
-    // that a rolled-back deploy could orphan and then collide with).
+    // that a rolled-back deploy could orphan and then collide with), each
+    // RetainExceptOnCreate so an SCP denying logs:DeleteLogGroup cannot wedge
+    // the stack on an update/delete rollback.
     for (const g of Object.values(groups)) {
       expect(g.Properties.LogGroupName).toBeUndefined();
-      expect(g.DeletionPolicy).toBe('Delete');
+      expect(g.DeletionPolicy).toBe('RetainExceptOnCreate');
     }
   });
 
