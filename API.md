@@ -211,6 +211,454 @@ The KMS key encrypting the bucket.
 ---
 
 
+### CrewCommandQueue <a name="CrewCommandQueue" id="@raindancers/raindancers-crew.CrewCommandQueue"></a>
+
+The BONE in the whistle/bone trigger model (see 55minutes ADR 0002): a per-project SQS command queue that holds the actual work item, delivers it to exactly one competing crew, and never loses it.
+
+The companion {@link CrewWakeHub } fans a verified GitHub event to two places:
+an IoT topic (the whistle — a dumb, lossy, fan-out "there's a bone" wake) and
+this queue (the bone — durable, one-winner). A crew woken by the whistle
+drains THIS queue to claim the work. The queue does the two things the IoT
+whistle cannot:
+
+- **Mutual exclusion.** A message is delivered to one consumer and hidden for
+  {@link CrewCommandQueueProps.visibilityTimeout} while it is worked, so when
+  several crews race on one whistle, exactly one claims the bone.
+- **Durability.** The message is held until acked (`DeleteMessage`); a crew
+  that dies mid-work never acks, so the bone reappears and another crew takes
+  it, and the {@link deadLetterQueue} catches a bone that keeps failing.
+
+This construct is instantiated in the PROJECT's own deploy account (the
+project owns its work pool). Both ends of the queue are cross-account and are
+authorised by the queue's resource policy, written here from the two props:
+the wake hub's sender role on the SEND side, the crew principals on the
+RECEIVE side. Nothing else may touch the queue.
+
+It is a sibling to {@link CrewWebhookIngress } (the VPC-push ingress variant),
+not a replacement: that one pushes to a VPC-resident crew; this one lets a
+crew that only dials out claim work with no inbound at all.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.CrewCommandQueue.Initializer"></a>
+
+```typescript
+import { CrewCommandQueue } from '@raindancers/raindancers-crew'
+
+new CrewCommandQueue(scope: Construct, id: string, props: CrewCommandQueueProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps">CrewCommandQueueProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.CrewCommandQueue.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewCommandQueueProps">CrewCommandQueueProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.with">with</a></code> | Applies one or more mixins to this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.grantConsume">grantConsume</a></code> | Grant a SAME-ACCOUNT principal permission to drain this queue (identity-side grant). |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.grantSend">grantSend</a></code> | Grant a SAME-ACCOUNT principal permission to send to this queue. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.CrewCommandQueue.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.CrewCommandQueue.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.CrewCommandQueue.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+##### `grantConsume` <a name="grantConsume" id="@raindancers/raindancers-crew.CrewCommandQueue.grantConsume"></a>
+
+```typescript
+public grantConsume(grantee: IGrantable): void
+```
+
+Grant a SAME-ACCOUNT principal permission to drain this queue (identity-side grant).
+
+The cross-account crew principals are already allowed by the queue
+resource policy; use this helper only for a consumer in the queue's own
+account whose role is defined in the same app.
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.CrewCommandQueue.grantConsume.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+##### `grantSend` <a name="grantSend" id="@raindancers/raindancers-crew.CrewCommandQueue.grantSend"></a>
+
+```typescript
+public grantSend(grantee: IGrantable): void
+```
+
+Grant a SAME-ACCOUNT principal permission to send to this queue.
+
+The wake
+hub's cross-account sender is already allowed by the resource policy; use
+this only for a same-account producer defined in the same app.
+
+###### `grantee`<sup>Required</sup> <a name="grantee" id="@raindancers/raindancers-crew.CrewCommandQueue.grantSend.parameter.grantee"></a>
+
+- *Type:* aws-cdk-lib.aws_iam.IGrantable
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.CrewCommandQueue.isConstruct"></a>
+
+```typescript
+import { CrewCommandQueue } from '@raindancers/raindancers-crew'
+
+CrewCommandQueue.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.CrewCommandQueue.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.property.deadLetterQueue">deadLetterQueue</a></code> | <code>aws-cdk-lib.aws_sqs.Queue</code> | The dead-letter queue for bones that exceed the redrive threshold. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueue.property.queue">queue</a></code> | <code>aws-cdk-lib.aws_sqs.Queue</code> | The command queue — the bone. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.CrewCommandQueue.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `deadLetterQueue`<sup>Required</sup> <a name="deadLetterQueue" id="@raindancers/raindancers-crew.CrewCommandQueue.property.deadLetterQueue"></a>
+
+```typescript
+public readonly deadLetterQueue: Queue;
+```
+
+- *Type:* aws-cdk-lib.aws_sqs.Queue
+
+The dead-letter queue for bones that exceed the redrive threshold.
+
+---
+
+##### `queue`<sup>Required</sup> <a name="queue" id="@raindancers/raindancers-crew.CrewCommandQueue.property.queue"></a>
+
+```typescript
+public readonly queue: Queue;
+```
+
+- *Type:* aws-cdk-lib.aws_sqs.Queue
+
+The command queue — the bone.
+
+---
+
+
+### CrewWakeHub <a name="CrewWakeHub" id="@raindancers/raindancers-crew.CrewWakeHub"></a>
+
+The WHISTLE hub in the whistle/bone trigger model (see 55minutes ADR 0002): the single, shared, centralised front door that turns a verified GitHub webhook into a per-project wake.
+
+Instantiated ONCE, in the 55minutes hub account. There is NO EventBridge bus:
+the verifier Lambda (which must exist for HMAC anyway) does the whole router
+job itself, which keeps the design simple and sidesteps EventBridge's
+inability to target a cross-account SQS queue. The flow:
+
+1. A GitHub repo webhook POSTs to the public HTTP API `POST /events`.
+2. The verifier checks the `X-Hub-Signature-256` HMAC against the shared
+   secret, rejects a bad signature before parsing, filters to real triggers,
+   and looks the repo up in its routing table.
+3. For a matched repo it does two direct SDK calls:
+   - `iot:Publish` to `crew/<project>/wake` — the whistle, a dumb fan-out
+     "there's a bone" wake every subscribed crew hears; and
+   - `sqs:SendMessage` to the project's {@link CrewCommandQueue } in its own
+     deploy account — the bone, cross-account (allowed from a Lambda; only the
+     EventBridge SQS *target* is account-restricted), durable, one-winner.
+
+Isolation between projects is by IoT topic-scoping (each crew's IoT policy
+locks it to its granted `crew/<project>/#` subtrees) and the per-queue
+resource policy, NOT by separate accounts — IoT Core is one shared broker and
+the topics are namespaces on it. Crew-to-project cardinality is deliberately
+open: nothing here assumes how many crews listen on a topic or drain a queue.
+
+If a shared event spine is ever wanted (audit, metrics, replay, other
+consumers), the verifier can additionally `PutEvents` onto an EventBridge bus
+at that point — adding the bus later is not a one-way door. It is left out now
+because there is no second consumer and it bought nothing but the
+cross-account friction this design removes.
+
+Sibling to {@link CrewWebhookIngress } (the VPC-push variant), not a replacement.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.CrewWakeHub.Initializer"></a>
+
+```typescript
+import { CrewWakeHub } from '@raindancers/raindancers-crew'
+
+new CrewWakeHub(scope: Construct, id: string, props: CrewWakeHubProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps">CrewWakeHubProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.CrewWakeHub.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewWakeHubProps">CrewWakeHubProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.with">with</a></code> | Applies one or more mixins to this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.addProject">addProject</a></code> | Wire one project onto the hub: add its routing-table entry, grant the verifier `iot:Publish` on the project's whistle topic, and grant it cross-account `sqs:SendMessage` on the project's bone queue. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.CrewWakeHub.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.CrewWakeHub.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.CrewWakeHub.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+##### `addProject` <a name="addProject" id="@raindancers/raindancers-crew.CrewWakeHub.addProject"></a>
+
+```typescript
+public addProject(project: CrewWakeHubProject): void
+```
+
+Wire one project onto the hub: add its routing-table entry, grant the verifier `iot:Publish` on the project's whistle topic, and grant it cross-account `sqs:SendMessage` on the project's bone queue.
+
+Call this to
+onboard a project after construction.
+
+###### `project`<sup>Required</sup> <a name="project" id="@raindancers/raindancers-crew.CrewWakeHub.addProject.parameter.project"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewWakeHubProject">CrewWakeHubProject</a>
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.CrewWakeHub.isConstruct"></a>
+
+```typescript
+import { CrewWakeHub } from '@raindancers/raindancers-crew'
+
+CrewWakeHub.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.CrewWakeHub.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.property.api">api</a></code> | <code>aws-cdk-lib.aws_apigatewayv2.HttpApi</code> | The public HTTP API — the `POST /events` front door. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.property.verifier">verifier</a></code> | <code>aws-cdk-lib.aws_lambda.Function</code> | The HMAC-verify + router Lambda. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHub.property.verifierRole">verifierRole</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | The verifier's execution role — the principal a CrewCommandQueue authorises as its senderRoleArn. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.CrewWakeHub.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `api`<sup>Required</sup> <a name="api" id="@raindancers/raindancers-crew.CrewWakeHub.property.api"></a>
+
+```typescript
+public readonly api: HttpApi;
+```
+
+- *Type:* aws-cdk-lib.aws_apigatewayv2.HttpApi
+
+The public HTTP API — the `POST /events` front door.
+
+---
+
+##### `verifier`<sup>Required</sup> <a name="verifier" id="@raindancers/raindancers-crew.CrewWakeHub.property.verifier"></a>
+
+```typescript
+public readonly verifier: Function;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Function
+
+The HMAC-verify + router Lambda.
+
+---
+
+##### `verifierRole`<sup>Required</sup> <a name="verifierRole" id="@raindancers/raindancers-crew.CrewWakeHub.property.verifierRole"></a>
+
+```typescript
+public readonly verifierRole: Role;
+```
+
+- *Type:* aws-cdk-lib.aws_iam.Role
+
+The verifier's execution role — the principal a CrewCommandQueue authorises as its senderRoleArn.
+
+---
+
+
 ### CrewWebhookIngress <a name="CrewWebhookIngress" id="@raindancers/raindancers-crew.CrewWebhookIngress"></a>
 
 OPTIONAL, composable webhook-ingress path for {@link EcsCrewHost}, mirroring the optional {@link CrewBackupBucket } shape.
@@ -1438,6 +1886,135 @@ instance, so the backup must outlive a stack teardown too.
 
 ---
 
+### CrewCommandQueueProps <a name="CrewCommandQueueProps" id="@raindancers/raindancers-crew.CrewCommandQueueProps"></a>
+
+Properties for {@link CrewCommandQueue}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewCommandQueueProps.Initializer"></a>
+
+```typescript
+import { CrewCommandQueueProps } from '@raindancers/raindancers-crew'
+
+const crewCommandQueueProps: CrewCommandQueueProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.consumerPrincipalArns">consumerPrincipalArns</a></code> | <code>string[]</code> | ARNs of the crew principals allowed to DRAIN this queue (the dogs that fetch the bone), wherever they run — an EC2 instance role, an assumed role, or an on-prem IAM user. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.projectSlug">projectSlug</a></code> | <code>string</code> | Project slug, e.g. `functional-self`. Drives the deterministic queue name `crew-commands-<projectSlug>` (and `-dlq`). |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.senderRoleArn">senderRoleArn</a></code> | <code>string</code> | ARN of the principal in the 55minutes wake-hub account that delivers bones onto this queue — the EventBridge rule's target role (or the pipe/role that performs the cross-account `SendMessage`). |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.maxReceiveCount">maxReceiveCount</a></code> | <code>number</code> | Redrive threshold: deliveries attempted before a bone is moved to the DLQ. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.retention">retention</a></code> | <code>aws-cdk-lib.Duration</code> | How long a bone is held in the queue before expiry if never claimed. |
+| <code><a href="#@raindancers/raindancers-crew.CrewCommandQueueProps.property.visibilityTimeout">visibilityTimeout</a></code> | <code>aws-cdk-lib.Duration</code> | Visibility timeout: how long a claimed-but-unacked bone stays hidden from other crews before reappearing. |
+
+---
+
+##### `consumerPrincipalArns`<sup>Required</sup> <a name="consumerPrincipalArns" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.consumerPrincipalArns"></a>
+
+```typescript
+public readonly consumerPrincipalArns: string[];
+```
+
+- *Type:* string[]
+
+ARNs of the crew principals allowed to DRAIN this queue (the dogs that fetch the bone), wherever they run — an EC2 instance role, an assumed role, or an on-prem IAM user.
+
+Each is granted `sqs:ReceiveMessage`,
+`sqs:DeleteMessage` and `sqs:GetQueueAttributes` via the queue resource
+policy. This is the RECEIVE side, and it is a list because the design
+permits several crews to compete on one project's queue (failover or
+load-sharing); SQS hands each bone to exactly one of them.
+
+At least one ARN is required — a queue nothing may drain is a mistake, not
+a valid state.
+
+---
+
+##### `projectSlug`<sup>Required</sup> <a name="projectSlug" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.projectSlug"></a>
+
+```typescript
+public readonly projectSlug: string;
+```
+
+- *Type:* string
+
+Project slug, e.g. `functional-self`. Drives the deterministic queue name `crew-commands-<projectSlug>` (and `-dlq`).
+
+The name is deterministic BY DESIGN: it is the cross-origin routing
+contract that the wake hub's EventBridge target sends to and that the crew
+poller drains. It is not an AWS-assigned physical id being pinned (which
+the project forbids) — it is a stable contract value, the same way an API
+path or a topic name is chosen, not generated.
+
+---
+
+##### `senderRoleArn`<sup>Required</sup> <a name="senderRoleArn" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.senderRoleArn"></a>
+
+```typescript
+public readonly senderRoleArn: string;
+```
+
+- *Type:* string
+
+ARN of the principal in the 55minutes wake-hub account that delivers bones onto this queue — the EventBridge rule's target role (or the pipe/role that performs the cross-account `SendMessage`).
+
+Granted `sqs:SendMessage` on this
+queue via the queue resource policy. This is the SEND side of the queue.
+
+---
+
+##### `maxReceiveCount`<sup>Optional</sup> <a name="maxReceiveCount" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.maxReceiveCount"></a>
+
+```typescript
+public readonly maxReceiveCount: number;
+```
+
+- *Type:* number
+- *Default:* 5
+
+Redrive threshold: deliveries attempted before a bone is moved to the DLQ.
+
+A crew that keeps dying mid-work on one message must not spin on it forever.
+
+---
+
+##### `retention`<sup>Optional</sup> <a name="retention" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.retention"></a>
+
+```typescript
+public readonly retention: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.days(4)
+
+How long a bone is held in the queue before expiry if never claimed.
+
+The
+durability window: a whistle missed while every crew was disconnected is
+recovered as long as the bone is still within retention.
+
+---
+
+##### `visibilityTimeout`<sup>Optional</sup> <a name="visibilityTimeout" id="@raindancers/raindancers-crew.CrewCommandQueueProps.property.visibilityTimeout"></a>
+
+```typescript
+public readonly visibilityTimeout: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.seconds(60)
+
+Visibility timeout: how long a claimed-but-unacked bone stays hidden from other crews before reappearing.
+
+Must exceed the longest a crew takes to
+process one bone and `DeleteMessage`, or two crews can end up working the
+same item. The wake model only needs the hand-off window (fetch + POST to
+the local hook + delete), not the whole downstream job.
+
+---
+
 ### CrewDataVolume <a name="CrewDataVolume" id="@raindancers/raindancers-crew.CrewDataVolume"></a>
 
 How a per-crew durable EBS volume is exposed to the host and its container.
@@ -1656,6 +2233,217 @@ S3 key of the source tarball within {@link sourceBucket}.
 
 Required when
 `sourceBucket` is set; ignored otherwise.
+
+---
+
+### CrewWakeHubProject <a name="CrewWakeHubProject" id="@raindancers/raindancers-crew.CrewWakeHubProject"></a>
+
+One project wired onto the wake hub: the GitHub repo whose events become whistles, the IoT topic the whistle is published to, and the cross-account command queue the matching bone is sent to.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewWakeHubProject.Initializer"></a>
+
+```typescript
+import { CrewWakeHubProject } from '@raindancers/raindancers-crew'
+
+const crewWakeHubProject: CrewWakeHubProject = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProject.property.commandQueueArn">commandQueueArn</a></code> | <code>string</code> | ARN of this project's {@link CrewCommandQueue } in the project's OWN deploy account. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProject.property.projectSlug">projectSlug</a></code> | <code>string</code> | Project slug, e.g. `functional-self`. Used as the default IoT topic segment (`crew/<projectSlug>/wake`) and in the generated routing table. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProject.property.repoFullName">repoFullName</a></code> | <code>string</code> | The full repo name the webhook events carry, e.g. `bwip-holdings/functional-self`. The verifier matches the inbound event's repo against this to route to the right project's whistle and bone. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProject.property.wakeTopic">wakeTopic</a></code> | <code>string</code> | IoT topic the whistle is published to. |
+
+---
+
+##### `commandQueueArn`<sup>Required</sup> <a name="commandQueueArn" id="@raindancers/raindancers-crew.CrewWakeHubProject.property.commandQueueArn"></a>
+
+```typescript
+public readonly commandQueueArn: string;
+```
+
+- *Type:* string
+
+ARN of this project's {@link CrewCommandQueue } in the project's OWN deploy account.
+
+The verifier sends the bone here cross-account; the queue's
+resource policy (written by CrewCommandQueue) authorises the verifier role.
+
+---
+
+##### `projectSlug`<sup>Required</sup> <a name="projectSlug" id="@raindancers/raindancers-crew.CrewWakeHubProject.property.projectSlug"></a>
+
+```typescript
+public readonly projectSlug: string;
+```
+
+- *Type:* string
+
+Project slug, e.g. `functional-self`. Used as the default IoT topic segment (`crew/<projectSlug>/wake`) and in the generated routing table.
+
+---
+
+##### `repoFullName`<sup>Required</sup> <a name="repoFullName" id="@raindancers/raindancers-crew.CrewWakeHubProject.property.repoFullName"></a>
+
+```typescript
+public readonly repoFullName: string;
+```
+
+- *Type:* string
+
+The full repo name the webhook events carry, e.g. `bwip-holdings/functional-self`. The verifier matches the inbound event's repo against this to route to the right project's whistle and bone.
+
+---
+
+##### `wakeTopic`<sup>Optional</sup> <a name="wakeTopic" id="@raindancers/raindancers-crew.CrewWakeHubProject.property.wakeTopic"></a>
+
+```typescript
+public readonly wakeTopic: string;
+```
+
+- *Type:* string
+- *Default:* `crew/<projectSlug>/wake`
+
+IoT topic the whistle is published to.
+
+---
+
+### CrewWakeHubProps <a name="CrewWakeHubProps" id="@raindancers/raindancers-crew.CrewWakeHubProps"></a>
+
+Properties for {@link CrewWakeHub}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewWakeHubProps.Initializer"></a>
+
+```typescript
+import { CrewWakeHubProps } from '@raindancers/raindancers-crew'
+
+const crewWakeHubProps: CrewWakeHubProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.verifierCode">verifierCode</a></code> | <code>aws-cdk-lib.aws_lambda.Code</code> | The code the verifier/router Lambda runs. It does the WHOLE router job:. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.webhookSecretArn">webhookSecretArn</a></code> | <code>string</code> | ARN of the Secrets Manager secret holding the GitHub webhook HMAC signing secret. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.architecture">architecture</a></code> | <code>aws-cdk-lib.aws_lambda.Architecture</code> | Verifier Lambda architecture. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.handler">handler</a></code> | <code>string</code> | The verifier Lambda handler entry point. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.projects">projects</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProject">CrewWakeHubProject</a>[]</code> | Projects wired onto the hub. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.runtime">runtime</a></code> | <code>aws-cdk-lib.aws_lambda.Runtime</code> | The verifier Lambda runtime. |
+| <code><a href="#@raindancers/raindancers-crew.CrewWakeHubProps.property.timeout">timeout</a></code> | <code>aws-cdk-lib.Duration</code> | Verifier Lambda timeout. |
+
+---
+
+##### `verifierCode`<sup>Required</sup> <a name="verifierCode" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.verifierCode"></a>
+
+```typescript
+public readonly verifierCode: Code;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Code
+
+The code the verifier/router Lambda runs. It does the WHOLE router job:.
+
+1. validate the GitHub `X-Hub-Signature-256` HMAC against the shared secret
+   (read from `GITHUB_WEBHOOK_SECRET_ARN`), reject on mismatch before parsing;
+2. filter to the events that are real triggers;
+3. look the event's repo up in the routing table (`CREW_ROUTING_TABLE`, a
+   JSON map of repoFullName -> {topic, queueUrl, queueArn}) and, for a match,
+   publish the whistle (`iot:Publish` to the topic) AND send the bone
+   (`sqs:SendMessage` to the queue URL, cross-account).
+
+The consumer supplies the code; the construct wires the plumbing (public
+edge, the scoped IAM for publish + cross-account send, the routing table in
+the environment) but ships no opinion about payload shape.
+
+---
+
+##### `webhookSecretArn`<sup>Required</sup> <a name="webhookSecretArn" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.webhookSecretArn"></a>
+
+```typescript
+public readonly webhookSecretArn: string;
+```
+
+- *Type:* string
+
+ARN of the Secrets Manager secret holding the GitHub webhook HMAC signing secret.
+
+The verifier is granted read on exactly this secret and receives
+its ARN as `GITHUB_WEBHOOK_SECRET_ARN`.
+
+---
+
+##### `architecture`<sup>Optional</sup> <a name="architecture" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.architecture"></a>
+
+```typescript
+public readonly architecture: Architecture;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Architecture
+- *Default:* lambda.Architecture.ARM_64
+
+Verifier Lambda architecture.
+
+---
+
+##### `handler`<sup>Optional</sup> <a name="handler" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.handler"></a>
+
+```typescript
+public readonly handler: string;
+```
+
+- *Type:* string
+- *Default:* 'index.handler'
+
+The verifier Lambda handler entry point.
+
+---
+
+##### `projects`<sup>Optional</sup> <a name="projects" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.projects"></a>
+
+```typescript
+public readonly projects: CrewWakeHubProject[];
+```
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewWakeHubProject">CrewWakeHubProject</a>[]
+- *Default:* []
+
+Projects wired onto the hub.
+
+Each adds a routing-table entry, an
+`iot:Publish` grant on its topic, and a cross-account `sqs:SendMessage`
+grant on its queue. May be empty at first and grown as projects onboard.
+
+---
+
+##### `runtime`<sup>Optional</sup> <a name="runtime" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.runtime"></a>
+
+```typescript
+public readonly runtime: Runtime;
+```
+
+- *Type:* aws-cdk-lib.aws_lambda.Runtime
+- *Default:* lambda.Runtime.PYTHON_3_12
+
+The verifier Lambda runtime.
+
+The verifier code is Python by default.
+
+---
+
+##### `timeout`<sup>Optional</sup> <a name="timeout" id="@raindancers/raindancers-crew.CrewWakeHubProps.property.timeout"></a>
+
+```typescript
+public readonly timeout: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.seconds(10)
+
+Verifier Lambda timeout.
 
 ---
 

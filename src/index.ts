@@ -5,3 +5,5 @@ export * from './fargate-crew';
 export * from './crew-backup-bucket';
 export * from './ecs-crew-host';
 export * from './crew-webhook-ingress';
+export * from './crew-command-queue';
+export * from './crew-wake-hub';
