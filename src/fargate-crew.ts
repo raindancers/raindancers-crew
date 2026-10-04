@@ -46,9 +46,10 @@ export interface FargateCrewProps {
    * cannot be created twice in one account/region, so a failed deploy that
    * CloudFormation rolls back can ORPHAN the group and make every subsequent
    * deploy fail change-set validation with "already exists". An auto-generated
-   * name never collides with a leftover, and `removalPolicy: DESTROY` (set
-   * unconditionally on this group) means a rollback deletes it rather than
-   * orphaning it.
+   * name never collides with a leftover, and `removalPolicy:
+   * RETAIN_ON_UPDATE_OR_DELETE` (set unconditionally on this group) deletes it
+   * on a failed initial create but retains it on an update/delete rollback, so
+   * an SCP that denies `logs:DeleteLogGroup` cannot wedge the stack.
    *
    * Consumers that launch tasks by hand (`RunTask` with an `awslogs` driver)
    * should read the resolved name from `this.logGroup.logGroupName` at deploy
@@ -158,13 +159,23 @@ export class FargateCrew extends Construct {
 
     // Log group. Name defaults to CDK auto-generation (unique per stack) so a
     // rolled-back deploy can never orphan a fixed literal name that then blocks
-    // every future deploy with "already exists". removalPolicy DESTROY makes a
-    // rollback delete the group instead of orphaning it. An explicit
-    // logGroupName is honoured only for an external contract that pins it.
+    // every future deploy with "already exists". An explicit logGroupName is
+    // honoured only for an external contract that pins it.
+    //
+    // removalPolicy RETAIN_ON_UPDATE_OR_DELETE (DeletionPolicy
+    // RetainExceptOnCreate): a FAILED INITIAL CREATE still rolls back and
+    // deletes the group cleanly, so a first-deploy failure leaves nothing
+    // behind. But an UPDATE or DELETE rollback RETAINS the group instead of
+    // issuing a delete. This matters in a Control Tower / Organizations account
+    // whose SCP denies logs:DeleteLogGroup: plain DESTROY makes CloudFormation
+    // attempt that denied delete on every update/delete rollback, the resource
+    // lands DELETE_FAILED, the stack wedges, and the next deploy then chokes at
+    // change-set validation. RetainExceptOnCreate sidesteps the denied delete
+    // while still cleaning up a never-succeeded create.
     this.logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: props.logGroupName,
       retention: retentionToEnum(retention),
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
 
     const secretArnPattern = `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:kirocrew/crew/${crew}/*`;

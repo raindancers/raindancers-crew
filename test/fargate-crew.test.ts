@@ -53,7 +53,7 @@ describe('FargateCrewBase', () => {
 });
 
 describe('FargateCrew', () => {
-  test('log group is auto-named (no fixed LogGroupName) and DESTROY-on-removal', () => {
+  test('log group is auto-named (no fixed LogGroupName) and RetainExceptOnCreate-on-removal', () => {
     const t = crewTemplate();
     // A fixed literal name can orphan on a rolled-back deploy and then block
     // every future deploy with "already exists"; the group must be auto-named.
@@ -61,8 +61,10 @@ describe('FargateCrew', () => {
     const values = Object.values(groups);
     expect(values).toHaveLength(1);
     expect(values[0].Properties.LogGroupName).toBeUndefined();
-    // A rollback must delete the group, not orphan it.
-    expect(values[0].DeletionPolicy).toBe('Delete');
+    // A failed initial create still deletes cleanly, but an update/delete
+    // rollback retains the group so an SCP denying logs:DeleteLogGroup cannot
+    // wedge the stack in DELETE_FAILED.
+    expect(values[0].DeletionPolicy).toBe('RetainExceptOnCreate');
   });
 
   test('honours an explicit logGroupName when a caller pins one', () => {
