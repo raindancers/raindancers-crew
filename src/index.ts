@@ -6,4 +6,5 @@ export * from './crew-backup-bucket';
 export * from './ecs-crew-host';
 export * from './crew-webhook-ingress';
 export * from './crew-command-queue';
+export * from './crew-roles-anywhere-role';
 export * from './crew-wake-hub';

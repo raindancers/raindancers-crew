@@ -435,6 +435,216 @@ The command queue — the bone.
 ---
 
 
+### CrewRolesAnywhereRole <a name="CrewRolesAnywhereRole" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole"></a>
+
+The crew's single AWS IDENTITY in the whistle/bone trigger model: one IAM role, assumed off-cloud via IAM Roles Anywhere (an X.509 client certificate exchanged for temporary SigV4 credentials), carrying BOTH halves of what a crew needs:.
+
+**Hear the whistle** — `iot:Connect` / `iot:Subscribe` / `iot:Receive` on
+  the project's `crew/<projectSlug>/wake` topic, connected over
+  MQTT-over-WebSocket signed with SigV4 (NOT the X.509-cert/IoT-policy path),
+  so the same Roles Anywhere credentials authenticate the IoT connection.
+- **Drain the bone** — `sqs:ReceiveMessage` / `DeleteMessage` /
+  `ChangeMessageVisibility` / `GetQueueAttributes` / `GetQueueUrl` on the
+  project's {@link CrewCommandQueue }, CROSS-ACCOUNT (the queue lives in the
+  project account; its resource policy must also list this role's ARN as a
+  `consumerPrincipalArn`).
+
+This construct is instantiated in the CREW (55minutes) account, because IoT
+topic subscription is same-account only and the whistle topic lives there.
+SQS is the leg that crosses the account boundary instead, which it can via the
+queue resource policy.
+
+The {@link CrewRolesAnywhereRoleProps.trustAnchorArn} is a required,
+never-hardcoded prop supplied at instantiation. The role's trust policy pins
+to {@link CrewRolesAnywhereRoleProps.certCn} AND to the trust anchor
+(`aws:SourceArn`), so a same-CN certificate from any other anchor cannot
+assume it.
+
+#### Initializers <a name="Initializers" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer"></a>
+
+```typescript
+import { CrewRolesAnywhereRole } from '@raindancers/raindancers-crew'
+
+new CrewRolesAnywhereRole(scope: Construct, id: string, props: CrewRolesAnywhereRoleProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.id">id</a></code> | <code>string</code> | *No description.* |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.props">props</a></code> | <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps">CrewRolesAnywhereRoleProps</a></code> | *No description.* |
+
+---
+
+##### `scope`<sup>Required</sup> <a name="scope" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.scope"></a>
+
+- *Type:* constructs.Construct
+
+---
+
+##### `id`<sup>Required</sup> <a name="id" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.id"></a>
+
+- *Type:* string
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps">CrewRolesAnywhereRoleProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.toString">toString</a></code> | Returns a string representation of this construct. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.with">with</a></code> | Applies one or more mixins to this construct. |
+
+---
+
+##### `toString` <a name="toString" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.toString"></a>
+
+```typescript
+public toString(): string
+```
+
+Returns a string representation of this construct.
+
+##### `with` <a name="with" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.with"></a>
+
+```typescript
+public with(mixins: ...IMixin[]): IConstruct
+```
+
+Applies one or more mixins to this construct.
+
+Mixins are applied in order. The list of constructs is captured at the
+start of the call, so constructs added by a mixin will not be visited.
+Use multiple `with()` calls if subsequent mixins should apply to added
+constructs.
+
+###### `mixins`<sup>Required</sup> <a name="mixins" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.with.parameter.mixins"></a>
+
+- *Type:* ...constructs.IMixin[]
+
+The mixins to apply.
+
+---
+
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
+
+---
+
+##### `isConstruct` <a name="isConstruct" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.isConstruct"></a>
+
+```typescript
+import { CrewRolesAnywhereRole } from '@raindancers/raindancers-crew'
+
+CrewRolesAnywhereRole.isConstruct(x: any)
+```
+
+Checks if `x` is a construct.
+
+Use this method instead of `instanceof` to properly detect `Construct`
+instances, even when the construct library is symlinked.
+
+Explanation: in JavaScript, multiple copies of the `constructs` library on
+disk are seen as independent, completely different libraries. As a
+consequence, the class `Construct` in each copy of the `constructs` library
+is seen as a different class, and an instance of one class will not test as
+`instanceof` the other class. `npm install` will not create installations
+like this, but users may manually symlink construct libraries together or
+use a monorepo tool: in those cases, multiple copies of the `constructs`
+library can be accidentally installed, and `instanceof` will behave
+unpredictably. It is safest to avoid using `instanceof`, and using
+this type-testing method instead.
+
+###### `x`<sup>Required</sup> <a name="x" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.isConstruct.parameter.x"></a>
+
+- *Type:* any
+
+Any object.
+
+---
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.commandQueueArn">commandQueueArn</a></code> | <code>string</code> | The derived (never imported) ARN of the project's command queue. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.role">role</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | The IAM role the crew assumes via Roles Anywhere. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.wakeTopic">wakeTopic</a></code> | <code>string</code> | The whistle topic this role may subscribe to. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.profile">profile</a></code> | <code>aws-cdk-lib.aws_rolesanywhere.CfnProfile</code> | The Roles Anywhere profile scoped to the role, when `createProfile` is true. |
+
+---
+
+##### `node`<sup>Required</sup> <a name="node" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.node"></a>
+
+```typescript
+public readonly node: Node;
+```
+
+- *Type:* constructs.Node
+
+The tree node.
+
+---
+
+##### `commandQueueArn`<sup>Required</sup> <a name="commandQueueArn" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.commandQueueArn"></a>
+
+```typescript
+public readonly commandQueueArn: string;
+```
+
+- *Type:* string
+
+The derived (never imported) ARN of the project's command queue.
+
+---
+
+##### `role`<sup>Required</sup> <a name="role" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.role"></a>
+
+```typescript
+public readonly role: Role;
+```
+
+- *Type:* aws-cdk-lib.aws_iam.Role
+
+The IAM role the crew assumes via Roles Anywhere.
+
+---
+
+##### `wakeTopic`<sup>Required</sup> <a name="wakeTopic" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.wakeTopic"></a>
+
+```typescript
+public readonly wakeTopic: string;
+```
+
+- *Type:* string
+
+The whistle topic this role may subscribe to.
+
+---
+
+##### `profile`<sup>Optional</sup> <a name="profile" id="@raindancers/raindancers-crew.CrewRolesAnywhereRole.property.profile"></a>
+
+```typescript
+public readonly profile: CfnProfile;
+```
+
+- *Type:* aws-cdk-lib.aws_rolesanywhere.CfnProfile
+
+The Roles Anywhere profile scoped to the role, when `createProfile` is true.
+
+---
+
+
 ### CrewWakeHub <a name="CrewWakeHub" id="@raindancers/raindancers-crew.CrewWakeHub"></a>
 
 The WHISTLE hub in the whistle/bone trigger model (see 55minutes ADR 0002): the single, shared, centralised front door that turns a verified GitHub webhook into a per-project wake.
@@ -2088,6 +2298,142 @@ public readonly mountPath: string;
 - *Type:* string
 
 The host mount path the container bind-mounts for `~/.kiro/crew`.
+
+---
+
+### CrewRolesAnywhereRoleProps <a name="CrewRolesAnywhereRoleProps" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps"></a>
+
+Properties for {@link CrewRolesAnywhereRole}.
+
+#### Initializer <a name="Initializer" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.Initializer"></a>
+
+```typescript
+import { CrewRolesAnywhereRoleProps } from '@raindancers/raindancers-crew'
+
+const crewRolesAnywhereRoleProps: CrewRolesAnywhereRoleProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.certCn">certCn</a></code> | <code>string</code> | The Common Name (CN) of the crew machine's client certificate, e.g. `crew-functional-self`. This PINS the role to one machine: Roles Anywhere surfaces the certificate subject as the session tag `aws:PrincipalTag/x509Subject/CN`, and the role trust policy conditions on it, so only a certificate carrying this CN (issued under the trust anchor's CA) may assume the role. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectAccountId">projectAccountId</a></code> | <code>string</code> | Account id of the PROJECT account where the {@link CrewCommandQueue } lives (e.g. functional-self's deploy account). Used only to construct the queue ARN string this role is granted `sqs:*` on — the queue is cross-account and is never referenced as a resource. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectSlug">projectSlug</a></code> | <code>string</code> | Project slug, e.g. `functional-self`. Drives BOTH well-known routing-contract values this role needs, derived from the same patterns the companion constructs use so the two sides cannot drift:. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.trustAnchorArn">trustAnchorArn</a></code> | <code>string</code> | ARN of a PRE-EXISTING IAM Roles Anywhere trust anchor, created out of band (see 55minutes `docs/onboard-repo-to-crew.md`, the one-time CA + trust anchor bootstrap). The anchor registers the CA whose certificates may request credentials; this construct only CONSUMES it. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.createProfile">createProfile</a></code> | <code>boolean</code> | Create a Roles Anywhere profile scoped to this role, so the crew can name a profile ARN when it requests credentials. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectRegion">projectRegion</a></code> | <code>string</code> | Region the project's command queue lives in. |
+| <code><a href="#@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.wakeTopic">wakeTopic</a></code> | <code>string</code> | Override the whistle topic the role may subscribe to. |
+
+---
+
+##### `certCn`<sup>Required</sup> <a name="certCn" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.certCn"></a>
+
+```typescript
+public readonly certCn: string;
+```
+
+- *Type:* string
+
+The Common Name (CN) of the crew machine's client certificate, e.g. `crew-functional-self`. This PINS the role to one machine: Roles Anywhere surfaces the certificate subject as the session tag `aws:PrincipalTag/x509Subject/CN`, and the role trust policy conditions on it, so only a certificate carrying this CN (issued under the trust anchor's CA) may assume the role.
+
+---
+
+##### `projectAccountId`<sup>Required</sup> <a name="projectAccountId" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectAccountId"></a>
+
+```typescript
+public readonly projectAccountId: string;
+```
+
+- *Type:* string
+
+Account id of the PROJECT account where the {@link CrewCommandQueue } lives (e.g. functional-self's deploy account). Used only to construct the queue ARN string this role is granted `sqs:*` on — the queue is cross-account and is never referenced as a resource.
+
+---
+
+##### `projectSlug`<sup>Required</sup> <a name="projectSlug" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectSlug"></a>
+
+```typescript
+public readonly projectSlug: string;
+```
+
+- *Type:* string
+
+Project slug, e.g. `functional-self`. Drives BOTH well-known routing-contract values this role needs, derived from the same patterns the companion constructs use so the two sides cannot drift:.
+
+the command-queue name `crew-commands-<projectSlug>` (see
+  {@link CrewCommandQueue }), and
+- the whistle topic `crew/<projectSlug>/wake` (see {@link CrewWakeHub }).
+
+The queue ARN is DERIVED from this slug plus {@link projectAccountId} and
+{@link projectRegion}, never imported — that is what breaks the apparent
+circular dependency between the role (which must scope its SQS policy to the
+queue) and the queue (which must grant this role). Both sides reference the
+other only by a value computed from the well-known name, not by a
+CloudFormation resource reference.
+
+---
+
+##### `trustAnchorArn`<sup>Required</sup> <a name="trustAnchorArn" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.trustAnchorArn"></a>
+
+```typescript
+public readonly trustAnchorArn: string;
+```
+
+- *Type:* string
+
+ARN of a PRE-EXISTING IAM Roles Anywhere trust anchor, created out of band (see 55minutes `docs/onboard-repo-to-crew.md`, the one-time CA + trust anchor bootstrap). The anchor registers the CA whose certificates may request credentials; this construct only CONSUMES it.
+
+It is a required prop and is NEVER hardcoded in the construct — the real
+ARN is supplied at instantiation in the crew (55minutes) stack. The trust
+anchor, the profile this construct creates, and the role it creates must
+all live in the SAME account (Roles Anywhere is a same-account service),
+which is why both the anchor and this construct belong in the crew account.
+
+---
+
+##### `createProfile`<sup>Optional</sup> <a name="createProfile" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.createProfile"></a>
+
+```typescript
+public readonly createProfile: boolean;
+```
+
+- *Type:* boolean
+- *Default:* true
+
+Create a Roles Anywhere profile scoped to this role, so the crew can name a profile ARN when it requests credentials.
+
+Set false if a shared profile is
+managed elsewhere.
+
+---
+
+##### `projectRegion`<sup>Optional</sup> <a name="projectRegion" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.projectRegion"></a>
+
+```typescript
+public readonly projectRegion: string;
+```
+
+- *Type:* string
+- *Default:* this stack's region
+
+Region the project's command queue lives in.
+
+Used only to construct the
+queue ARN string.
+
+---
+
+##### `wakeTopic`<sup>Optional</sup> <a name="wakeTopic" id="@raindancers/raindancers-crew.CrewRolesAnywhereRoleProps.property.wakeTopic"></a>
+
+```typescript
+public readonly wakeTopic: string;
+```
+
+- *Type:* string
+- *Default:* `crew/<projectSlug>/wake`
+
+Override the whistle topic the role may subscribe to.
 
 ---
 
