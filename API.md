@@ -3198,9 +3198,10 @@ Why auto-named is the default: a fixed literal name (`/kirocrew/crew/<crew>`)
 cannot be created twice in one account/region, so a failed deploy that
 CloudFormation rolls back can ORPHAN the group and make every subsequent
 deploy fail change-set validation with "already exists". An auto-generated
-name never collides with a leftover, and `removalPolicy: DESTROY` (set
-unconditionally on this group) means a rollback deletes it rather than
-orphaning it.
+name never collides with a leftover, and `removalPolicy:
+RETAIN_ON_UPDATE_OR_DELETE` (set unconditionally on this group) deletes it
+on a failed initial create but retains it on an update/delete rollback, so
+an SCP that denies `logs:DeleteLogGroup` cannot wedge the stack.
 
 Consumers that launch tasks by hand (`RunTask` with an `awslogs` driver)
 should read the resolved name from `this.logGroup.logGroupName` at deploy
